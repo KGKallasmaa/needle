@@ -125,7 +125,7 @@ async def _code_rows(
             return title_num, None, None, "fetch"
         try:
             text, err = await llm.complete(
-                build_code_prompt(section), max_tokens=4096, reasoning_effort="minimal"
+                build_code_prompt(section), max_tokens=4096, reasoning_effort="low"
             )
         except Exception as exc:
             return title_num, None, None, ("llm_error", str(exc)[:200])

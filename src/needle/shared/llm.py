@@ -12,8 +12,8 @@ from needle.shared.retry import (
 )
 
 TIMEOUT_S = 60.0
-DEFAULT_JUDGE_MODEL = "openai/gpt-6.1-sol"
-DEFAULT_LLM_MODEL = "openai/gpt-6.1-sol"
+DEFAULT_JUDGE_MODEL = "openai/gpt-6-luna"
+DEFAULT_LLM_MODEL = "openai/gpt-6-luna"
 
 NO_REASONING_EFFORTS = frozenset({"", "none"})
 

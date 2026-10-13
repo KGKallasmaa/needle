@@ -298,7 +298,7 @@ async def _filingdoc_rows(
             return "thin"
         try:
             reply, err = await llm.complete(
-                build_filingdoc_prompt(filing, text), max_tokens=4096, reasoning_effort="minimal"
+                build_filingdoc_prompt(filing, text), max_tokens=4096, reasoning_effort="low"
             )
         except Exception:
             return "llm_error"
