@@ -46,7 +46,7 @@ async def project_batch(
     async def _one(item: T) -> tuple[T, str | None, dict[str, str] | None]:
         try:
             text, err = await llm.complete(
-                build_prompt(item), max_tokens=512, reasoning_effort="minimal"
+                build_prompt(item), max_tokens=4096, reasoning_effort="minimal"
             )
         except Exception as exc:
             return item, None, {"error_type": "projection_crash", "error_message": str(exc)[:500]}

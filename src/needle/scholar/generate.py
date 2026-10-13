@@ -167,7 +167,7 @@ async def _bucket_query(
 ) -> tuple[str | None, dict[str, str] | None]:
     try:
         text, err = await llm.complete(
-            build_query_prompt(bucket, paper, body), max_tokens=1024, reasoning_effort="minimal"
+            build_query_prompt(bucket, paper, body), max_tokens=4096, reasoning_effort="minimal"
         )
     except Exception as exc:
         return None, {"error_type": "projection_crash", "error_message": str(exc)[:500]}
