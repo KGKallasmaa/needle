@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright-core";
 
 const MIME = { ".html": "text/html", ".json": "application/json",
@@ -9,8 +9,9 @@ const MIME = { ".html": "text/html", ".json": "application/json",
 function serveSite(root) {
   return createServer(async (req, res) => {
     const path = decodeURIComponent(req.url.split("?")[0]);
-    const file = join(root, path === "/" ? "index.html" : path.slice(1));
+    const file = resolve(root, `.${path === "/" ? "/index.html" : path}`);
     try {
+      if (!file.startsWith(root + sep)) throw new Error(`outside the site: ${path}`);
       const data = await readFile(file);
       res.writeHead(200, { "content-type": MIME[extname(file)] ?? "application/octet-stream" });
       res.end(data);
