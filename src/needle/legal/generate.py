@@ -18,7 +18,7 @@ from needle.legal.projection import (
 )
 from needle.legal.sources import CourtListenerClient, EcfrClient, month_windows
 from needle.shared.concurrency import bounded_gather
-from needle.shared.llm import LLMClient
+from needle.shared.llm import GENERATION_MAX_TOKENS, REASONING_EFFORT, LLMClient
 from needle.shared.sampling import dedupe_by, interleave
 
 CODE_OVERSAMPLE = 3
@@ -125,7 +125,9 @@ async def _code_rows(
             return title_num, None, None, "fetch"
         try:
             text, err = await llm.complete(
-                build_code_prompt(section), max_tokens=4096, reasoning_effort="low"
+                build_code_prompt(section),
+                max_tokens=GENERATION_MAX_TOKENS,
+                reasoning_effort=REASONING_EFFORT,
             )
         except Exception as exc:
             return title_num, None, None, ("llm_error", str(exc)[:200])
