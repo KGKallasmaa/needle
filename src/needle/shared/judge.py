@@ -280,7 +280,7 @@ async def judge_one(
         prompt,
         parse_judgement,
         retry_suffix=PARSE_RETRY_SUFFIX,
-        max_tokens=4096,
+        max_tokens=32_768,
         system=judge_instructions(),
     )
 
@@ -294,6 +294,6 @@ async def classify_query(
         prompt,
         parse_query_profile,
         retry_suffix=PROFILE_RETRY_SUFFIX,
-        max_tokens=4096,
+        max_tokens=32_768,
         system=profile_instructions(),
     )
