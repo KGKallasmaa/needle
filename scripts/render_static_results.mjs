@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { withDashboard } from "./dashboard_page.mjs";
+import { resultsFiles } from "./results_page.mjs";
 
 const root = resolve(process.argv[2]);
 const indexPath = join(root, "index.html");
@@ -24,12 +25,6 @@ const fillEmptyElement = (doc, id, inner) => {
   if (found !== 1) throw new Error(`expected one empty #${id}, found ${found}`);
   return filled;
 };
-
-const fillTemplate = (template, values) =>
-  template.replace(/\{\{([A-Z_]+)\}\}/g, (slot, key) => {
-    if (!(key in values)) throw new Error(`no value for ${slot}`);
-    return values[key];
-  });
 
 const readSnapshot = (page) => page.evaluate(() => {
   const tableRow = (cells, tag) => {
@@ -57,60 +52,62 @@ const readSnapshot = (page) => page.evaluate(() => {
     const sub = card.querySelector(".sub[id]");
     if (sub?.textContent.trim()) html[sub.id] = sub.innerHTML;
   }
-  const summary = document.getElementById("card-standings")._summaryRows?.();
 
   return {
     html,
     missing,
     verticals: Object.fromEntries(VERTICALS),
     markdown: buildMarkdown(),
-    summaryTable: summary ? tableHtml(summary) : null,
-    engines: summary ? summary.length - 1 : 0,
+    summary: document.getElementById("card-standings")._summaryData?.() ?? null,
     lastRun: new Date(history[history.length - 1].ts).toISOString(),
     pricesAsOf: PRICES_ASOF,
     base: document.querySelector('meta[property="og:url"]').content,
   };
 });
 
+async function renderPdf(page, html) {
+  await page.emulateMedia({ media: "print", colorScheme: "light" });
+  await page.setContent(html, { waitUntil: "load" });
+  return page.pdf({ format: "A4", landscape: true, printBackground: true,
+                    margin: { top: "12mm", bottom: "12mm", left: "10mm", right: "10mm" } });
+}
+
+const withLead = (markdown, lead) => markdown.replace("\n\n## ", `\n\n${lead}\n\n## `);
+
 try {
-  const snapshot = await withDashboard(root, {}, async (page) => {
+  await withDashboard(root, {}, async (page) => {
     await page.waitForFunction(
       () => document.getElementById("updated").textContent.trim(), null, { timeout: 60000 });
-    return readSnapshot(page);
+    const snapshot = await readSnapshot(page);
+    const results = snapshot.summary && resultsFiles(await readFile(resultsTemplate, "utf8"), snapshot);
+    const pdf = results && await renderPdf(page, results.page);
+
+    let doc = await readFile(indexPath, "utf8");
+    const resultsLink = results ? RESULTS_LINK : MARKDOWN_ONLY_LINK;
+    for (const [id, inner] of Object.entries({ ...snapshot.html, "results-link": resultsLink })) {
+      doc = fillEmptyElement(doc, id, inner);
+    }
+    doc = doc.replace(/<span class="vert" data-vert="([a-z_]+)"><\/span>/g, (_, key) =>
+      `<span class="vert" data-vert="${key}">${snapshot.verticals[key] ?? key}</span>`);
+    doc = doc.replace("</head>", `${MARKDOWN_LINK}\n</head>`);
+
+    if (results) {
+      await mkdir(join(root, "results"), { recursive: true });
+      await writeFile(join(root, "results", "index.html"), results.page);
+      await writeFile(join(root, "results.csv"), results.csv);
+      await writeFile(join(root, "results.json"), results.json);
+      await writeFile(join(root, "results.pdf"), pdf);
+    }
+    await writeFile(join(root, "results.md"),
+      results ? withLead(snapshot.markdown, results.lead) : snapshot.markdown);
+    await writeFile(indexPath, doc);
+    for (const id of snapshot.missing) console.error(`no rows for #${id}, left empty`);
+    if (!results) warn("no standings in the last 7 days, results/ not written");
+    console.log(`filled ${Object.keys(snapshot.html).length} elements; wrote `
+      + (results ? `results/ (${snapshot.summary.engines.length} engines), csv, json, pdf`
+                 : "no results/ (no standings)")
+      + " and results.md");
   });
-
-  const verticalNames = Object.values(snapshot.verticals);
-  const resultsPage = snapshot.summaryTable && fillTemplate(await readFile(resultsTemplate, "utf8"), {
-    BASE: snapshot.base,
-    TABLE: snapshot.summaryTable,
-    ENGINES: String(snapshot.engines),
-    UPDATED: snapshot.html.updated,
-    LAST_RUN: snapshot.lastRun,
-    PRICES_ASOF: snapshot.pricesAsOf,
-    VERTICAL_COUNT: String(verticalNames.length),
-    VERTICALS: verticalNames.join(", "),
-  });
-
-  let doc = await readFile(indexPath, "utf8");
-  const resultsLink = resultsPage ? RESULTS_LINK : MARKDOWN_ONLY_LINK;
-  for (const [id, inner] of Object.entries({ ...snapshot.html, "results-link": resultsLink })) {
-    doc = fillEmptyElement(doc, id, inner);
-  }
-  doc = doc.replace(/<span class="vert" data-vert="([a-z_]+)"><\/span>/g, (_, key) =>
-    `<span class="vert" data-vert="${key}">${snapshot.verticals[key] ?? key}</span>`);
-  doc = doc.replace("</head>", `${MARKDOWN_LINK}\n</head>`);
-
-  if (resultsPage) {
-    await mkdir(join(root, "results"), { recursive: true });
-    await writeFile(join(root, "results", "index.html"), resultsPage);
-  }
-  await writeFile(join(root, "results.md"), snapshot.markdown);
-  await writeFile(indexPath, doc);
-  for (const id of snapshot.missing) console.error(`no rows for #${id}, left empty`);
-  if (!resultsPage) warn("no standings in the last 7 days, results/ not written");
-  console.log(`filled ${Object.keys(snapshot.html).length} elements; wrote `
-    + (resultsPage ? `results/ (${snapshot.engines} engines)` : "no results/ (no standings)")
-    + " and results.md");
 } catch (e) {
   warn(`static results failed, index.html left as is: ${e.message.split("\n")[0]}`);
 }

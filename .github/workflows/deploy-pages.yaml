@@ -31,6 +31,7 @@ jobs:
             scripts/gen_og_stubs.py
             scripts/render_og_images.mjs
             scripts/render_static_results.mjs
+            scripts/results_page.mjs
           sparse-checkout-cone-mode: false
       - uses: astral-sh/setup-uv@v5
       - run: |
