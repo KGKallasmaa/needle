@@ -8,9 +8,7 @@ const indexPath = join(root, "index.html");
 const resultsTemplate = new URL("../dashboard/results.html", import.meta.url);
 const MARKDOWN_LINK =
   '<link rel="alternate" type="text/markdown" href="results.md" title="NEEDLE results as Markdown">';
-const RESULTS_LINK =
-  ' <a href="results/">Results table</a> · <a href="results.md">all tables as Markdown</a>.';
-const MARKDOWN_ONLY_LINK = ' <a href="results.md">All tables as Markdown</a>.';
+const RESULTS_LINK = ' <a href="results/">Results table</a>.';
 
 const warn = (message) =>
   console.log(`::warning title=Static results::${message.replace(/%/g, "%25")}`);
@@ -83,7 +81,7 @@ try {
     const pdf = results && await renderPdf(page, results.page);
 
     let doc = await readFile(indexPath, "utf8");
-    const resultsLink = results ? RESULTS_LINK : MARKDOWN_ONLY_LINK;
+    const resultsLink = results ? RESULTS_LINK : "";
     for (const [id, inner] of Object.entries({ ...snapshot.html, "results-link": resultsLink })) {
       doc = fillEmptyElement(doc, id, inner);
     }

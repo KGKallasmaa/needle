@@ -507,7 +507,7 @@
   <div class="topbar">
     <div class="header-actions">
       <a href="https://github.com/keenableai/needle" title="Source on GitHub" aria-label="Source on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
-      <button id="export-md" title="Open the current tables as Markdown">MD</button>
+      <a id="export-md" href="results.md" title="All tables as Markdown">MD</a>
       <button id="export-pdf" title="Print / save as PDF">PDF</button>
       <button id="theme-toggle" title="Dark theme" aria-label="Dark theme"><svg class="moon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M6.5 1.5a6.5 6.5 0 1 0 8 8A5.5 5.5 0 0 1 6.5 1.5z"/></svg><svg class="sun" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/></svg></button>
     </div>
@@ -3253,10 +3253,6 @@ function revealHash() {
 }
 window.addEventListener("hashchange", revealHash);
 
-document.getElementById("export-md").addEventListener("click", () => {
-  const blob = new Blob([buildMarkdown()], { type: "text/plain;charset=utf-8" });
-  window.open(URL.createObjectURL(blob));
-});
 document.getElementById("export-pdf").addEventListener("click", () => window.print());
 const themeToggle = document.getElementById("theme-toggle");
 const syncThemeToggle = () =>
