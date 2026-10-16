@@ -14,8 +14,8 @@ from needle.shared.retry import (
 TIMEOUT_S = 60.0
 DEFAULT_JUDGE_MODEL = "openai/gpt-6-luna"
 DEFAULT_LLM_MODEL = "openai/gpt-6-luna"
-REASONING_EFFORT = "low"
-GENERATION_MAX_TOKENS = 4096
+REASONING_EFFORT = "high"
+GENERATION_MAX_TOKENS = 8192
 
 NO_REASONING_EFFORTS = frozenset({"", "none"})
 
