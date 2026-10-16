@@ -55,7 +55,6 @@ const readSnapshot = (page) => page.evaluate(() => {
     html,
     missing,
     verticals: Object.fromEntries(VERTICALS),
-    markdown: buildMarkdown(),
     summary: document.getElementById("card-standings")._summaryData?.() ?? null,
     lastRun: new Date(history[history.length - 1].ts).toISOString(),
     pricesAsOf: PRICES_ASOF,
@@ -70,19 +69,17 @@ async function renderPdf(page, html) {
                     margin: { top: "12mm", bottom: "12mm", left: "10mm", right: "10mm" } });
 }
 
-const withLead = (markdown, lead) => markdown.replace(/^# .+\n\n.+\n/, (head) => `${head}\n${lead}\n`);
-
 try {
   await withDashboard(root, {}, async (page) => {
     await page.waitForFunction(
       () => document.getElementById("updated").textContent.trim(), null, { timeout: 60000 });
     const snapshot = await readSnapshot(page);
     const results = snapshot.summary && resultsFiles(await readFile(resultsTemplate, "utf8"), snapshot);
+    const markdown = await page.evaluate((lead) => buildMarkdown(lead), results?.lead);
     const pdf = results && await renderPdf(page, results.page);
 
     let doc = await readFile(indexPath, "utf8");
-    const resultsLink = results ? RESULTS_LINK : "";
-    for (const [id, inner] of Object.entries({ ...snapshot.html, "results-link": resultsLink })) {
+    for (const [id, inner] of Object.entries({ ...snapshot.html, "results-link": results ? RESULTS_LINK : "" })) {
       doc = fillEmptyElement(doc, id, inner);
     }
     doc = doc.replace(/<span class="vert" data-vert="([a-z_]+)"><\/span>/g, (_, key) =>
@@ -96,8 +93,7 @@ try {
       await writeFile(join(root, "results.json"), results.json);
       await writeFile(join(root, "results.pdf"), pdf);
     }
-    await writeFile(join(root, "results.md"),
-      results ? withLead(snapshot.markdown, results.lead) : snapshot.markdown);
+    await writeFile(join(root, "results.md"), markdown);
     await writeFile(indexPath, doc);
     for (const id of snapshot.missing) console.error(`no rows for #${id}, left empty`);
     if (!results) warn("no standings in the last 7 days, results/ not written");

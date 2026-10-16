@@ -507,7 +507,7 @@
   <div class="topbar">
     <div class="header-actions">
       <a href="https://github.com/keenableai/needle" title="Source on GitHub" aria-label="Source on GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
-      <a id="export-md" href="results.md" title="All tables as Markdown">MD</a>
+      <a id="export-md" href="results.md" title="This page as Markdown">MD</a>
       <button id="export-pdf" title="Print / save as PDF">PDF</button>
       <button id="theme-toggle" title="Dark theme" aria-label="Dark theme"><svg class="moon" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M6.5 1.5a6.5 6.5 0 1 0 8 8A5.5 5.5 0 0 1 6.5 1.5z"/></svg><svg class="sun" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/></svg></button>
     </div>
@@ -3010,23 +3010,23 @@ function cardRows(card, cell = (c) => c.textContent) {
   return rows.map((r) => r.filter((_, i) => keep[i]));
 }
 
-function inlineMarkdown(node, base) {
+function md(node) {
   const wrap = (s, mark) => {
     const t = s.trim();
     return t ? s.replace(t, `${mark}${t}${mark}`) : s;
   };
   const walk = (n) => {
     if (n.nodeType === Node.TEXT_NODE) return n.textContent;
-    if (n.nodeType !== Node.ELEMENT_NODE || n.matches("#results-link, .chart-tools")) return "";
+    if (n.nodeType !== Node.ELEMENT_NODE) return "";
     const inner = [...n.childNodes].map(walk).join("");
     if (n.matches(".hint[title]")) return `${inner} (${n.title})`;
     switch (n.tagName) {
       case "A": {
         const href = n.getAttribute("href");
-        return href.startsWith("#") ? inner : `[${inner.trim()}](${new URL(href, base)})`;
+        return href.startsWith("#") ? inner : `[${inner.trim()}](${href})`;
       }
-      case "B": case "STRONG": return wrap(inner, "**");
-      case "EM": case "I": return wrap(inner, "*");
+      case "B": return wrap(inner, "**");
+      case "EM": return wrap(inner, "*");
       case "CODE": return wrap(inner, "`");
       case "SUB": return `_${inner}`;
       default: return inner;
@@ -3035,17 +3035,14 @@ function inlineMarkdown(node, base) {
   return walk(node).replace(/\s+/g, " ").trim();
 }
 
-function buildMarkdown() {
+function buildMarkdown(lead) {
   drawAllTrends?.();
-  const base = document.querySelector('meta[property="og:url"]').content;
-  const clean = (s) => s.replace(/\s+/g, " ").trim();
-  const md = (n) => inlineMarkdown(n, base);
-  const lines = [];
+  const header = document.getElementById("top");
+  const lines = [`# ${md(header.querySelector("h1"))}`];
   const push = (...blocks) => { for (const b of blocks) if (b) lines.push("", b); };
 
-  const header = document.getElementById("top");
-  push(`# ${clean(header.querySelector("h1").textContent)}`);
-  for (const n of header.querySelectorAll(".fm > p, .fm > ul")) {
+  push(md(header.querySelector(".lastrun")), lead);
+  for (const n of header.querySelectorAll(".fm > p:not(.lastrun), .fm > ul")) {
     push(n.tagName === "UL" ? [...n.children].map((li) => `- ${md(li)}`).join("\n") : md(n));
   }
   const summary = document.getElementById("card-standings")._summaryRows?.();
@@ -3053,7 +3050,7 @@ function buildMarkdown() {
 
   const pushCard = (node, level) => {
     const h2 = node.querySelector(":scope > h2");
-    if (h2) push(`${"#".repeat(level)} ${clean(h2.textContent)}`);
+    if (h2) push(`${"#".repeat(level)} ${md(h2)}`);
     for (const n of node.querySelectorAll(":scope > .sub, :scope > p, :scope > .prose > p")) push(md(n));
     const panels = node.querySelectorAll(":scope > .lb-panel");
     if (panels.length) {
@@ -3066,11 +3063,11 @@ function buildMarkdown() {
     if (pre) push("```\n" + pre.textContent.trim() + "\n```");
   };
   for (const n of document.querySelectorAll(".wrap > *")) {
-    if (n.matches("h2.section-title")) push(`## ${clean(n.textContent)}`);
+    if (n.matches("h2.section-title")) push(`## ${md(n)}`);
     else if (n.matches("p.section-desc")) push(md(n));
     else if (n.matches(".card")) pushCard(n, 3);
   }
-  return lines.join("\n").trimStart() + "\n";
+  return lines.join("\n") + "\n";
 }
 
 const EXPORT_PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-dasharray",
