@@ -70,7 +70,7 @@ async function renderPdf(page, html) {
                     margin: { top: "12mm", bottom: "12mm", left: "10mm", right: "10mm" } });
 }
 
-const withLead = (markdown, lead) => markdown.replace("\n\n## ", `\n\n${lead}\n\n## `);
+const withLead = (markdown, lead) => markdown.replace(/^# .+\n\n.+\n/, (head) => `${head}\n${lead}\n`);
 
 try {
   await withDashboard(root, {}, async (page) => {

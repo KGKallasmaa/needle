@@ -3000,52 +3000,77 @@ function rowsToMarkdown(rows) {
   return lines.join("\n");
 }
 
-function cardRows(card) {
+function cardRows(card, cell = (c) => c.textContent) {
   const table = card.querySelector("table");
   const rows = card._mdRows?.() ?? (table
-    ? [...table.querySelectorAll("tr")].map((tr) => [...tr.children].map((c) => c.textContent))
+    ? [...table.querySelectorAll("tr")].map((tr) => [...tr.children].map(cell))
     : null);
   if (!rows?.length) return null;
   const keep = rows[0].map((_, i) => rows.some((r) => String(r[i]).trim()));
   return rows.map((r) => r.filter((_, i) => keep[i]));
 }
 
+function inlineMarkdown(node, base) {
+  const wrap = (s, mark) => {
+    const t = s.trim();
+    return t ? s.replace(t, `${mark}${t}${mark}`) : s;
+  };
+  const walk = (n) => {
+    if (n.nodeType === Node.TEXT_NODE) return n.textContent;
+    if (n.nodeType !== Node.ELEMENT_NODE || n.matches("#results-link, .chart-tools")) return "";
+    const inner = [...n.childNodes].map(walk).join("");
+    if (n.matches(".hint[title]")) return `${inner} (${n.title})`;
+    switch (n.tagName) {
+      case "A": {
+        const href = n.getAttribute("href");
+        return href.startsWith("#") ? inner : `[${inner.trim()}](${new URL(href, base)})`;
+      }
+      case "B": case "STRONG": return wrap(inner, "**");
+      case "EM": case "I": return wrap(inner, "*");
+      case "CODE": return wrap(inner, "`");
+      case "SUB": return `_${inner}`;
+      default: return inner;
+    }
+  };
+  return walk(node).replace(/\s+/g, " ").trim();
+}
+
 function buildMarkdown() {
   drawAllTrends?.();
+  const base = document.querySelector('meta[property="og:url"]').content;
   const clean = (s) => s.replace(/\s+/g, " ").trim();
-  const subText = (node) => {
-    if (!node) return "";
-    const copy = node.cloneNode(true);
-    for (const h of copy.querySelectorAll(".hint[title]")) {
-      h.textContent = `${h.textContent} (${h.getAttribute("title")})`;
-    }
-    return clean(copy.textContent);
-  };
-  const lines = ["# NEEDLE — search engine benchmarks"];
-  const updated = document.getElementById("updated").textContent;
-  if (updated) lines.push("", updated);
-  const summary = document.getElementById("card-standings")._summaryRows?.();
-  if (summary) lines.push("", "## Summary — one row per engine", "", rowsToMarkdown(summary));
-  for (const card of document.querySelectorAll(".wrap .card, .wrap .lb-panel")) {
-    if (card.closest("#card-runs")) {
-      if (card.id === "card-runs") {
-        lines.push("", `## ${card.querySelector("h2").textContent}`,
-          "", subText(card.querySelector(".sub")) +
-          " (https://huggingface.co/datasets/keenable-ai/needle-results)");
-      }
-      continue;
-    }
-    if (card.querySelector(".lb-panel")) continue;
-    const rows = cardRows(card);
-    const prose = rows ? [] : [...card.querySelectorAll(".prose p")];
-    if (!rows && !prose.length) continue;
-    lines.push("", `## ${card.querySelector("h2").textContent}`);
-    const sub = subText(card.querySelector(".sub"));
-    if (sub) lines.push("", sub);
-    if (rows) lines.push("", rowsToMarkdown(rows));
-    else for (const p of prose) lines.push("", clean(p.textContent).replace(/\|/g, "\\|"));
+  const md = (n) => inlineMarkdown(n, base);
+  const lines = [];
+  const push = (...blocks) => { for (const b of blocks) if (b) lines.push("", b); };
+
+  const header = document.getElementById("top");
+  push(`# ${clean(header.querySelector("h1").textContent)}`);
+  for (const n of header.querySelectorAll(".fm > p, .fm > ul")) {
+    push(n.tagName === "UL" ? [...n.children].map((li) => `- ${md(li)}`).join("\n") : md(n));
   }
-  return lines.join("\n") + "\n";
+  const summary = document.getElementById("card-standings")._summaryRows?.();
+  if (summary) push("## Summary — one row per engine", rowsToMarkdown(summary));
+
+  const pushCard = (node, level) => {
+    const h2 = node.querySelector(":scope > h2");
+    if (h2) push(`${"#".repeat(level)} ${clean(h2.textContent)}`);
+    for (const n of node.querySelectorAll(":scope > .sub, :scope > p, :scope > .prose > p")) push(md(n));
+    const panels = node.querySelectorAll(":scope > .lb-panel");
+    if (panels.length) {
+      for (const p of panels) pushCard(p, h2 ? level + 1 : level);
+    } else if (node.id !== "card-runs") {
+      const rows = cardRows(node, md);
+      if (rows) push(rowsToMarkdown(rows));
+    }
+    const pre = node.querySelector(":scope > pre");
+    if (pre) push("```\n" + pre.textContent.trim() + "\n```");
+  };
+  for (const n of document.querySelectorAll(".wrap > *")) {
+    if (n.matches("h2.section-title")) push(`## ${clean(n.textContent)}`);
+    else if (n.matches("p.section-desc")) push(md(n));
+    else if (n.matches(".card")) pushCard(n, 3);
+  }
+  return lines.join("\n").trimStart() + "\n";
 }
 
 const EXPORT_PROPS = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-dasharray",
