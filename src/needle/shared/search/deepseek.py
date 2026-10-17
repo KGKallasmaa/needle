@@ -7,12 +7,13 @@ MAX_COUNT = 50
 
 def _query(ops: QueryOps) -> str:
     tail = [" OR ".join(f"site:{s}" for s in ops.sites)] if ops.sites else []
+    tail.append("lang:en")
     if ops.after:
         tail.append(f"after:{ops.after.isoformat()}")
     if ops.before:
         tail.append(f"before:{ops.before.isoformat()}")
     suffix = " ".join(tail)
-    budget = MAX_QUERY_CHARS - len(suffix) - (1 if suffix else 0)
+    budget = MAX_QUERY_CHARS - len(suffix) - 1
     return " ".join(p for p in (clipped_text(ops.text, max(budget, 0)), suffix) if p)
 
 

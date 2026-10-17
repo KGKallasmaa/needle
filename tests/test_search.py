@@ -872,7 +872,7 @@ async def test_deepseek_maps_fields_and_builds_body(monkeypatch):
     assert results[1].published_date is None
     assert results[2].snippet is None
     assert calls["url"] == "https://api.deepseek.com/v1/tools/search"
-    assert calls["json"] == {"query": "hi", "count": 5}
+    assert calls["json"] == {"query": "hi lang:en", "count": 5}
     assert calls["headers"] == {"Authorization": "Bearer k"}
 
 
@@ -887,7 +887,7 @@ async def test_deepseek_clips_query_and_keeps_operators(monkeypatch):
     q = calls["json"]["query"]
     assert len(q) <= 128
     assert q.startswith("word0 word1 ")
-    assert q.endswith(" site:sec.gov OR site:x.com after:2026-06-01")
+    assert q.endswith(" site:sec.gov OR site:x.com lang:en after:2026-06-01")
 
     await c.search("hi", num_results=80)
     assert calls["json"]["count"] == 50
@@ -1809,7 +1809,7 @@ async def test_brave_freshness_fills_open_ends(monkeypatch):
             lambda: DeepSeekClient(api_key="k"),
             {"results": []},
             "json",
-            {"query": OPS_QUERY, "count": 10},
+            {"query": OPS_QUERY.replace(" after:", " lang:en after:"), "count": 10},
         ),
         (
             lambda: TinyFishClient(api_key="k"),
