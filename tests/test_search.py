@@ -11,6 +11,7 @@ from needle.shared.search import (
     ChatGptSearchClient,
     ClaudeSearchClient,
     ContextDevClient,
+    DeepSeekClient,
     ExaClient,
     FirecrawlClient,
     JinaClient,
@@ -842,6 +843,56 @@ async def test_ceramic_maps_fields_and_builds_body(monkeypatch):
     assert calls["headers"] == {"Authorization": "Bearer k"}
 
 
+async def test_deepseek_maps_fields_and_builds_body(monkeypatch):
+    payload = {
+        "results": [
+            {
+                "url": "https://a",
+                "title": "A",
+                "snippet": "short",
+                "summary": "long",
+                "date": "2026-06-01T00:00:00+00:00",
+            },
+            {"url": "https://b", "title": "", "snippet": "only short", "summary": "", "date": None},
+            {"url": "https://c", "title": "C", "snippet": "", "summary": ""},
+            {"title": "no url"},
+        ]
+    }
+    c = DeepSeekClient(api_key="k")
+    fake, calls = _canned(payload)
+    monkeypatch.setattr(c, "_request_json", fake)
+
+    results, err = await c.search("hi", num_results=5)
+    assert err is None
+    assert [r.url for r in results] == ["https://a", "https://b", "https://c"]
+    assert results[0].snippet == "long"
+    assert results[0].published_date == "2026-06-01T00:00:00+00:00"
+    assert results[1].title is None
+    assert results[1].snippet == "only short"
+    assert results[1].published_date is None
+    assert results[2].snippet is None
+    assert calls["url"] == "https://api.deepseek.com/v1/tools/search"
+    assert calls["json"] == {"query": "hi", "count": 5}
+    assert calls["headers"] == {"Authorization": "Bearer k"}
+
+
+async def test_deepseek_clips_query_and_keeps_operators(monkeypatch):
+    c = DeepSeekClient(api_key="k")
+    fake, calls = _canned({"results": []})
+    monkeypatch.setattr(c, "_request_json", fake)
+
+    await c.search(
+        " ".join(f"word{i}" for i in range(40)) + " site:sec.gov site:x.com after:2026-06-01"
+    )
+    q = calls["json"]["query"]
+    assert len(q) <= 128
+    assert q.startswith("word0 word1 ")
+    assert q.endswith(" site:sec.gov OR site:x.com after:2026-06-01")
+
+    await c.search("hi", num_results=80)
+    assert calls["json"]["count"] == 50
+
+
 async def test_tinyfish_maps_fields_and_builds_params(monkeypatch):
     payload = {
         "results": [
@@ -1266,6 +1317,7 @@ def test_factory_builds_new_engines(monkeypatch):
     monkeypatch.setenv("KAGI_API_KEY", "kk")
     monkeypatch.setenv("JINA_API_KEY", "jk")
     monkeypatch.setenv("CONTEXT_DEV_API_KEY", "cdk")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "dk")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "ak")
     monkeypatch.setenv("OPENAI_API_KEY", "oak")
     clients = build_search_clients(
@@ -1288,6 +1340,7 @@ def test_factory_builds_new_engines(monkeypatch):
             "kagi",
             "jina",
             "context",
+            "deepseek",
         ]
     )
     assert isinstance(clients["google"], SerperClient)
@@ -1329,6 +1382,8 @@ def test_factory_builds_new_engines(monkeypatch):
     assert isinstance(clients["context"], ContextDevClient)
     assert clients["context"].api_key == "cdk"
     assert clients["context"].engine == "context"
+    assert isinstance(clients["deepseek"], DeepSeekClient)
+    assert clients["deepseek"].api_key == "dk"
 
 
 def test_factory_builds_engine_variants(monkeypatch):
@@ -1749,6 +1804,12 @@ async def test_brave_freshness_fills_open_ends(monkeypatch):
             {"result": {"results": []}},
             "json",
             {"query": "acme filing"},
+        ),
+        (
+            lambda: DeepSeekClient(api_key="k"),
+            {"results": []},
+            "json",
+            {"query": OPS_QUERY, "count": 10},
         ),
         (
             lambda: TinyFishClient(api_key="k"),
