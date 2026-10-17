@@ -1,3 +1,5 @@
+from typing import Any
+
 from needle.shared.search.base import HttpSearchClient, SearchResult
 from needle.shared.search.queryops import QueryOps, clipped_text, parse_ops
 
@@ -27,12 +29,16 @@ class DeepSeekClient(HttpSearchClient):
         payload, err = await self._request_json(
             "POST",
             f"{self.base_url}/v1/tools/search",
-            json={"query": _query(parse_ops(query)), "count": min(num_results, MAX_COUNT)},
+            json={
+                "query": _query(parse_ops(query)),
+                "count": min(num_results, MAX_COUNT),
+                "need_content": False,
+            },
             headers={"Authorization": f"Bearer {self.api_key}"},
         )
         if err is not None:
             return None, err
-        raw_results = payload.get("results", []) if isinstance(payload, dict) else []
+        raw: Any = payload.get("results") if isinstance(payload, dict) else None
         results = [
             SearchResult(
                 url=r["url"],
@@ -40,7 +46,7 @@ class DeepSeekClient(HttpSearchClient):
                 snippet=r.get("summary") or r.get("snippet") or None,
                 published_date=r.get("date") or None,
             )
-            for r in raw_results[:num_results]
+            for r in (raw if isinstance(raw, list) else [])
             if isinstance(r, dict) and r.get("url")
         ]
-        return results, None
+        return results[:num_results], None
