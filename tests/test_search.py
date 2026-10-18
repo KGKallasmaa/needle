@@ -1,4 +1,5 @@
 import asyncio
+import re
 from datetime import UTC, date, datetime, timedelta
 
 import httpx
@@ -1909,7 +1910,8 @@ class _StampHttp:
         self.stamps = []
 
     async def request(self, method, url, **kwargs):
-        self.stamps.append(search_base.utc_stamp())
+        sink = search_base._REQUEST_TIMES.get()
+        self.stamps.append(sink[-1] if sink else None)
         if self.delay_s:
             await asyncio.sleep(self.delay_s)
         status = 429 if len(self.stamps) <= self.fail_first else 200
@@ -1930,6 +1932,12 @@ class _StampClient(search_base.HttpSearchClient):
         if err is not None:
             return None, err
         return [], None
+
+
+def test_utc_stamp_is_iso_utc_to_the_millisecond():
+    stamp = search_base.utc_stamp()
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", stamp), stamp
+    assert datetime.fromisoformat(stamp.replace("Z", "+00:00")).tzinfo is UTC
 
 
 async def test_search_all_records_when_each_engine_was_queried():
