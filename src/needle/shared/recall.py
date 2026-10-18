@@ -133,10 +133,13 @@ async def run_known_item_eval(
     )
     query_outs = await asyncio.gather(
         *[
-            asyncio.gather(*[eval_engine(query, r, e) for r, e in searches])
+            asyncio.gather(*[eval_engine(query, s.results, s.error) for s in searches])
             for query, searches in zip(queries, searches_by_query, strict=True)
         ]
     )
+    for entries, searches in zip(query_outs, searches_by_query, strict=True):
+        for out, search in zip(entries, searches, strict=True):
+            out["queried_at"] = search.queried_at
 
     engines_out: dict[str, dict[str, Any]] = {}
     for idx, name in enumerate(engine_names):
@@ -145,6 +148,8 @@ async def run_known_item_eval(
     if engine_names:
         engines_out[ULTIMATE] = summary(ultimate_fn(query_outs, cap=num_results), None)
         engines_out[ULTIMATE]["mrr_at_k"] = None
+        for pq in engines_out[ULTIMATE]["per_query"]:
+            pq["queried_at"] = None
 
     classify_misses(query_outs, engine_names, engines_out)
 

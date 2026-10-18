@@ -3,7 +3,9 @@ import json
 import math
 import ssl
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import httpx
@@ -36,6 +38,19 @@ def latency_stats(latencies_ms: list[float]) -> dict[str, float | int | list[flo
         "p95_ms": round(pct(0.95), 1),
         "samples_ms": [round(v, 1) for v in values],
     }
+
+
+_REQUEST_TIMES: ContextVar[list[str] | None] = ContextVar("needle_request_times", default=None)
+
+
+def utc_stamp() -> str:
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def note_request_time() -> None:
+    sink = _REQUEST_TIMES.get()
+    if sink is not None:
+        sink.append(utc_stamp())
 
 
 @dataclass(frozen=True)
@@ -106,23 +121,40 @@ class SearchClient(Protocol):
     def set_max_concurrency(self, max_concurrency: int) -> None: ...
 
 
+@dataclass(frozen=True)
+class SearchRun:
+    results: list[SearchResult] | None
+    error: dict[str, str] | None
+    queried_at: str | None = None
+
+
+async def _one_search(client: "SearchClient", text: str, num_results: int) -> SearchRun:
+    sink: list[str] = []
+    token = _REQUEST_TIMES.set(sink)
+    try:
+        results, error = await client.search(text, num_results=num_results)
+    finally:
+        _REQUEST_TIMES.reset(token)
+    return SearchRun(results=results, error=error, queried_at=sink[0] if sink else None)
+
+
 async def search_all(
     engines: dict[str, "SearchClient"],
     texts: list[str],
     *,
     num_results: int,
     concurrent_search: bool = False,
-) -> list[list[tuple[list[SearchResult] | None, dict[str, str] | None]]]:
+) -> list[list[SearchRun]]:
     if not concurrent_search:
         return [
-            [await client.search(text, num_results=num_results) for client in engines.values()]
+            [await _one_search(client, text, num_results) for client in engines.values()]
             for text in texts
         ]
     return list(
         await asyncio.gather(
             *[
                 asyncio.gather(
-                    *[client.search(text, num_results=num_results) for client in engines.values()]
+                    *[_one_search(client, text, num_results) for client in engines.values()]
                 )
                 for text in texts
             ]
@@ -192,6 +224,7 @@ class HttpSearchClient:
         async def send() -> httpx.Response:
             nonlocal elapsed_ms
             async with self._sem:
+                note_request_time()
                 started = time.perf_counter()
                 resp = await self._http().request(method, url, **kwargs)
                 elapsed_ms = (time.perf_counter() - started) * 1000.0
