@@ -143,7 +143,7 @@ jobs:
         with:
           site-data: true
       - run: |
-          uv run needle agentic_rare run --limit 100 \
+          uv run needle agentic_rare run --limit 100 --judge-concurrency 16 \
             --engines "$ENGINES" --queries-out agentic_rare.jsonl --out agentic_rare.json
       - uses: ./.github/actions/publish
         with:
