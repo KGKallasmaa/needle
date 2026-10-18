@@ -105,7 +105,7 @@ jobs:
           site-data: true
       - run: |
           uv run needle news generate --source rss --out fresh.jsonl
-          uv run needle news run --queries fresh.jsonl --limit 20 \
+          uv run needle news run --queries fresh.jsonl --limit 20 --judge-concurrency 16 \
             --engines "$ENGINES" --out ndcg.json
       - uses: ./.github/actions/publish
         with:
