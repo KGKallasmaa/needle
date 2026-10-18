@@ -1,4 +1,5 @@
 import asyncio
+import re
 from datetime import UTC, date, datetime, timedelta
 
 import httpx
@@ -1473,10 +1474,8 @@ async def test_search_all_is_serial_and_text_major():
     rows = await search_all(engines, ["a", "b"], num_results=5)
     assert counters["peak"] == 1
     assert len(rows) == 2 and all(len(row) == 2 for row in rows)
-    results, err = rows[0][0]
-    assert err is None and results[0].url == "https://e1/a"
-    results, err = rows[1][1]
-    assert results[0].url == "https://e2/b"
+    assert rows[0][0].error is None and rows[0][0].results[0].url == "https://e1/a"
+    assert rows[1][1].results[0].url == "https://e2/b"
     assert await search_all({}, ["a", "b"], num_results=5) == [[], []]
 
 
@@ -1485,10 +1484,8 @@ async def test_search_all_concurrent_overlaps_and_keeps_order():
     rows = await search_all(engines, ["a", "b"], num_results=5, concurrent_search=True)
     assert counters["peak"] > 1
     assert len(rows) == 2 and all(len(row) == 2 for row in rows)
-    results, err = rows[0][0]
-    assert err is None and results[0].url == "https://e1/a"
-    results, err = rows[1][1]
-    assert results[0].url == "https://e2/b"
+    assert rows[0][0].error is None and rows[0][0].results[0].url == "https://e1/a"
+    assert rows[1][1].results[0].url == "https://e2/b"
     assert await search_all({}, ["a"], num_results=5, concurrent_search=True) == [[]]
 
 
@@ -1894,3 +1891,94 @@ async def test_clients_translate_operators(monkeypatch, make_client, payload, fi
 
     await c.search(OPS_QUERY)
     assert expected.items() <= calls[field].items()
+
+
+class _StampResp:
+    def __init__(self, status_code):
+        self.status_code = status_code
+        self.text = ""
+        self.headers = {}
+
+    def json(self):
+        return {"results": []}
+
+
+class _StampHttp:
+    def __init__(self, fail_first=0, delay_s=0.0):
+        self.fail_first = fail_first
+        self.delay_s = delay_s
+        self.stamps = []
+
+    async def request(self, method, url, **kwargs):
+        sink = search_base._REQUEST_TIMES.get()
+        self.stamps.append(sink[-1] if sink else None)
+        if self.delay_s:
+            await asyncio.sleep(self.delay_s)
+        status = 429 if len(self.stamps) <= self.fail_first else 200
+        return _StampResp(status)
+
+
+class _StampClient(search_base.HttpSearchClient):
+    def __init__(self, engine, http):
+        super().__init__()
+        self.engine = engine
+        self.http = http
+
+    def _http(self):
+        return self.http
+
+    async def search(self, query, *, num_results=10):
+        payload, err = await self._request_json("GET", f"http://x/{query}")
+        if err is not None:
+            return None, err
+        return [], None
+
+
+def test_utc_stamp_is_iso_utc_to_the_millisecond():
+    stamp = search_base.utc_stamp()
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z", stamp), stamp
+    assert datetime.fromisoformat(stamp.replace("Z", "+00:00")).tzinfo is UTC
+
+
+async def test_search_all_records_when_each_engine_was_queried():
+    engines = {name: _StampClient(name, _StampHttp()) for name in ("e1", "e2")}
+    before = search_base.utc_stamp()
+    rows = await search_all(engines, ["a", "b"], num_results=5)
+    after = search_base.utc_stamp()
+
+    stamps = [run.queried_at for row in rows for run in row]
+    assert len(stamps) == 4
+    for stamp in stamps:
+        assert stamp is not None and stamp.endswith("Z")
+        assert before <= stamp <= after
+    for qi in (0, 1):
+        for ei, name in enumerate(("e1", "e2")):
+            assert rows[qi][ei].queried_at == engines[name].http.stamps[qi]
+
+
+async def test_queried_at_is_the_first_attempt_of_a_retried_search():
+    http = _StampHttp(fail_first=1)
+    client = _StampClient("e1", http)
+    client.retry_base_s = 0.01
+    rows = await search_all({"e1": client}, ["a"], num_results=5)
+    assert len(http.stamps) == 2
+    assert rows[0][0].queried_at == http.stamps[0]
+    assert http.stamps[0] < http.stamps[1]
+
+
+async def test_queried_at_is_isolated_across_concurrent_searches():
+    engines = {
+        "slow": _StampClient("slow", _StampHttp(delay_s=0.05)),
+        "fast": _StampClient("fast", _StampHttp()),
+    }
+    rows = await search_all(engines, ["a", "b"], num_results=5, concurrent_search=True)
+    for qi in (0, 1):
+        assert rows[qi][0].queried_at == engines["slow"].http.stamps[qi]
+        assert rows[qi][1].queried_at == engines["fast"].http.stamps[qi]
+    assert rows[0][0].queried_at < rows[1][0].queried_at
+
+
+async def test_queried_at_is_none_when_a_client_issues_no_request():
+    engines, _ = _counting_engines()
+    rows = await search_all(engines, ["a"], num_results=5)
+    assert [run.queried_at for run in rows[0]] == [None, None]
