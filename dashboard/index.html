@@ -756,8 +756,7 @@
 
   <h2 class="section-title" id="sec-overlap">Index independence</h2>
   <p class="section-desc">Repeated overlap on junk or near-identical
-    lists suggests a shared upstream index (all runs, all
-    benchmarks).</p>
+    lists suggests a shared upstream index (all benchmarks).</p>
 
   <div class="card" id="card-def-suspicious">
     <h2>Definition: suspicious sharing</h2>
@@ -788,6 +787,10 @@
     <h2>Index independence — four views</h2>
     <div class="sub">suspicious-sharing matrix, URL-intersection matrix,
       borrowing graph, and per-engine result uniqueness</div>
+    <div class="legend" id="independence-range" role="group" aria-label="Time range">
+      <button type="button" aria-pressed="true">all runs</button>
+      <button type="button" aria-pressed="false" data-week>last 7 days</button>
+    </div>
     <div class="lb-tabs" role="tablist" aria-label="Index independence views">
       <button role="tab" aria-selected="true" class="active" data-panel="card-lowshared">suspicious sharing</button>
       <button role="tab" aria-selected="false" data-panel="card-urlshare">URL intersection</button>
@@ -796,7 +799,7 @@
       <div class="tab-ind" aria-hidden="true"></div>
     </div>
     <div class="lb-panel active" id="card-lowshared" role="tabpanel">
-      <h2>Suspicious sharing (all runs)</h2>
+      <h2>Suspicious sharing</h2>
       <div class="sub" id="lowshared-sub"></div>
       <div class="overlap-matrix" id="lowshared-table"></div>
       <div class="overlap-pair" id="lowshared-pair" aria-live="polite"></div>
@@ -808,7 +811,7 @@
       <div class="overlap-pair" id="urlshare-pair" aria-live="polite"></div>
     </div>
     <div class="lb-panel" id="card-sharegraph" role="tabpanel">
-      <h2>Borrowing graph (all runs)</h2>
+      <h2>Borrowing graph</h2>
       <div class="sub" id="sharegraph-sub"></div>
       <div id="sharegraph"></div>
     </div>
@@ -1128,6 +1131,7 @@ function engineCell(engine, cls = "") {
 }
 let history = [];
 let uniqueness = [];
+let overlap = [];
 let ciData = null;
 
 const fmt3 = (v) => v == null ? "–" : v.toFixed(3);
@@ -2641,6 +2645,13 @@ function uniquenessAgg(rows) {
   return agg;
 }
 
+function renderIndependence(weekOnly) {
+  const pick = (rows) => (weekOnly ? inRange(rows, WEEK_MS) : rows);
+  const uniqAgg = uniquenessAgg(pick(uniqueness));
+  renderOverlap(pick(overlap), uniqAgg);
+  renderUniqueness(uniqAgg);
+}
+
 function renderUniqueness(agg) {
   const holder = document.getElementById("uniqueness-table");
   holder.replaceChildren();
@@ -3361,9 +3372,14 @@ async function main() {
   renderLatencySummary(history);
   renderAll();
   uniqueness = uniquenessRows.filter((r) => !HIDDEN_ENGINES.has(r.engine));
-  const uniqAgg = uniquenessAgg(uniqueness);
-  renderOverlap(overlapRows.filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b)), uniqAgg);
-  renderUniqueness(uniqAgg);
+  overlap = overlapRows.filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b));
+  renderIndependence(false);
+  document.getElementById("independence-range").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button");
+    if (!btn) return;
+    for (const b of ev.currentTarget.querySelectorAll("button")) b.setAttribute("aria-pressed", b === btn);
+    renderIndependence(btn.hasAttribute("data-week"));
+  });
   initRunBrowser();
   initChartTools();
   revealHash();
