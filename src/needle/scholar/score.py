@@ -21,8 +21,15 @@ class GoldPaper:
     bucket: str
 
 
+def _doi_match(gold: str, found: set[str]) -> bool:
+    return any(doi == gold or doi.startswith(f"{gold}/") for doi in found)
+
+
 def ids_match(gold: dict[str, str], found: PaperIds) -> bool:
-    return any(k in MATCH_FIELDS and v in getattr(found, k) for k, v in gold.items())
+    return any(
+        _doi_match(v, found.doi) if k == "doi" else k in MATCH_FIELDS and v in getattr(found, k)
+        for k, v in gold.items()
+    )
 
 
 def _summary(per_query: list[dict], latency: dict | None) -> dict[str, Any]:

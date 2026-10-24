@@ -65,6 +65,15 @@ def test_extract_doi_strips_publisher_suffix():
         "10.1002/etc.4890"
     }
     assert extract_doi("https://x.com/doi/10.1002/etc.4890/pdf", "") == {"10.1002/etc.4890"}
+    assert extract_doi(
+        "https://link.springer.com/content/pdf/10.1038/s41467-026-75970-1.pdf", ""
+    ) == {"10.1038/s41467-026-75970-1"}
+
+
+def test_extract_doi_decodes_percent_encoded_url():
+    assert extract_doi(
+        "https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0348010", ""
+    ) == {"10.1371/journal.pone.0348010"}
 
 
 def test_extract_ids_caps_snippet():

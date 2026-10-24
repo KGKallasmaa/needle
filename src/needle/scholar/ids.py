@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass, field
+from urllib.parse import unquote
 
 from needle.shared.search import SearchResult, titled_snippet
 
@@ -21,7 +22,7 @@ PMC_URL_RES = [
     re.compile(r"europepmc\.org/article/PMC/PMC(\d+)", re.IGNORECASE),
 ]
 DOI_RE = re.compile(r"(10\.\d{4,9}/[-._;()/:a-z0-9]+)", re.IGNORECASE)
-DOI_SUFFIX_RE = re.compile(r"/(full|pdf|epdf|html|meta|abstract|citations?)$", re.IGNORECASE)
+DOI_SUFFIX_RE = re.compile(r"[/.](full|pdf|epdf|html|meta|abstract|citations?)$", re.IGNORECASE)
 
 MATCH_FIELDS = ("arxiv", "doi", "pmid")
 
@@ -62,7 +63,7 @@ def _clean_doi(raw: str) -> str:
 
 
 def extract_doi(url: str, text: str) -> set[str]:
-    return {_clean_doi(m.group(1)) for src in (url, text) for m in DOI_RE.finditer(src)}
+    return {_clean_doi(m.group(1)) for src in (unquote(url), text) for m in DOI_RE.finditer(src)}
 
 
 def extract_ids(result: SearchResult, *, snippet_chars: int) -> PaperIds:
