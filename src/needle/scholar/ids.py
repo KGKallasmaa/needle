@@ -22,7 +22,10 @@ PMC_URL_RES = [
     re.compile(r"europepmc\.org/article/PMC/PMC(\d+)", re.IGNORECASE),
 ]
 DOI_RE = re.compile(r"(10\.\d{4,9}/[-._;()/:a-z0-9]+)", re.IGNORECASE)
-DOI_SUFFIX_RE = re.compile(r"[/.](full|pdf|epdf|html|meta|abstract|citations?)$", re.IGNORECASE)
+DOI_SUFFIX_RE = re.compile(r"/(full|pdf|epdf|html|meta|abstract|citations?)$", re.IGNORECASE)
+
+DOI_RESOLVER_RE = re.compile(r"^(?:https?://)?(?:dx\.)?doi\.org/", re.IGNORECASE)
+DOI_FILE_EXT_RE = re.compile(r"\.(?:pdf|e?pub|html?|xml)$", re.IGNORECASE)
 
 MATCH_FIELDS = ("arxiv", "doi", "pmid")
 
@@ -62,8 +65,18 @@ def _clean_doi(raw: str) -> str:
     return DOI_SUFFIX_RE.sub("", doi).lower()
 
 
+def _publisher_variants(doi: str) -> set[str]:
+    base = DOI_FILE_EXT_RE.sub("", doi)
+    parts = base.split("/")
+    return {doi, base} | {"/".join(parts[:i]) for i in range(2, len(parts))}
+
+
 def extract_doi(url: str, text: str) -> set[str]:
-    return {_clean_doi(m.group(1)) for src in (unquote(url), text) for m in DOI_RE.finditer(src)}
+    decoded = unquote(url)
+    from_url = {_clean_doi(m.group(1)) for m in DOI_RE.finditer(decoded)}
+    if not DOI_RESOLVER_RE.match(decoded):
+        from_url = {v for doi in from_url for v in _publisher_variants(doi)}
+    return from_url | {_clean_doi(m.group(1)) for m in DOI_RE.finditer(text)}
 
 
 def extract_ids(result: SearchResult, *, snippet_chars: int) -> PaperIds:

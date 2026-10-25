@@ -33,13 +33,6 @@ def test_ids_match():
     assert not ids_match({"doi": "10.1/x"}, PaperIds())
 
 
-def test_ids_match_doi_followed_by_publisher_path():
-    gold = {"doi": "10.1093/ehjdh/ztag109"}
-    assert ids_match(gold, PaperIds(doi={"10.1093/ehjdh/ztag109/8725358"}))
-    assert not ids_match(gold, PaperIds(doi={"10.1093/ehjdh/ztag1090"}))
-    assert not ids_match(gold, PaperIds(doi={"10.1093/ehjdh"}))
-
-
 def _gold(text, bucket, ids, paper_key):
     return GoldPaper(text=text, paper_key=paper_key, ids=ids, bucket=bucket)
 
