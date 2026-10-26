@@ -13,6 +13,10 @@ from needle.shared.search.base import (
 ULTIMATE = "ultimate"
 
 
+def answered(per_query: list[dict]) -> list[dict]:
+    return [pq for pq in per_query if pq["search_error"] is None]
+
+
 def first_rank(flags: Sequence[object]) -> int | None:
     return next((rank for rank, flag in enumerate(flags, start=1) if flag), None)
 
@@ -58,7 +62,7 @@ def ultimate_per_query(query_outs: list[list[dict]], *, cap: int) -> list[dict]:
 def recall_summary(
     per_query: list[dict], latency: dict | None, scored: list[dict] | None = None
 ) -> dict[str, Any]:
-    scored = per_query if scored is None else scored
+    scored = answered(per_query if scored is None else scored)
     for pq in per_query:
         pq["score"] = None
     for pq in scored:

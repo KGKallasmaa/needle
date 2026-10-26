@@ -65,9 +65,6 @@ def _score_query(
         "search_error": search_error,
     }
     if search_error is not None:
-        if idcg:
-            out["dcg"] = 0.0
-            out["ndcg"] = 0.0
         return out
     results = results or []
     out["n_results"] = len(results)
