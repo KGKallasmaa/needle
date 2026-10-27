@@ -1,19 +1,30 @@
+export const BASE = "https://keenableai.github.io/needle/";
 const AUTHORS = [["Andrey", "Styskin"], ["Matthias", "Petri"], ["Ilya", "Gusev"]];
 const DOI = "10.5281/zenodo.22095155";
-const LICENSE = "https://opensource.org/license/mit";
+const DATA_LICENSE = "https://creativecommons.org/licenses/by/4.0/";
+const CODE_LICENSE = "https://opensource.org/license/mit";
+const DATE_PUBLISHED = "2026-08-27";
+const HOME_URL = "https://keenable.ai/";
+const SEARCH_API_URL = "https://docs.keenable.ai/";
 const REPO = "https://github.com/keenableai/needle";
 const HF_DATASET = "https://huggingface.co/datasets/keenable-ai/needle-results";
 const DATASET_NAME = "NEEDLE: web search API benchmark results";
 const ORGANIZATION = {
   "@type": "Organization",
-  "@id": "https://keenable.ai/#organization",
+  "@id": `${HOME_URL}#organization`,
   name: "Keenable",
-  url: "https://keenable.ai/",
+  url: HOME_URL,
   sameAs: ["https://github.com/keenableai", "https://huggingface.co/keenable-ai"],
 };
 const DOWNLOADS = [["results.csv", "text/csv"], ["results.json", "application/json"],
   ["results.md", "text/markdown"], ["results.pdf", "application/pdf"]];
 const TITLE_RIVALS = ["exa", "parallel", "tavily", "brave"];
+const SHARE_IMAGE = "og/needle-overall";
+const SHARE_SIZE = { width: 1200, height: 630 };
+const SHARE_TOP = 6;
+const ALT_MAX = 125;
+const HISTORY_DATA = [["csv", "CSV"], ["json", "JSON"], ["md", "Markdown"]];
+const HISTORY_CHART = [["webp", "WebP"], ["png", "PNG"]];
 const PROSE_NAMES = new Map([
   ["exa", "Exa"], ["exa-instant", "Exa Instant"], ["brave", "Brave"],
   ["brave-llmcontext", "Brave LLM Context"], ["parallel", "Parallel"],
@@ -105,11 +116,28 @@ function leadText({ summary, overall, verticals, lastRun, cellOf }) {
     const fastest = Math.min(...summary.engines.map((x) => x.p50 ?? Infinity));
     const latency = cellOf(home.x, "p50 latency");
     const price = home.x.price ? `, at ${cellOf(home.x, "$ / 1k queries")} per 1,000 queries` : "";
-    sentences.push(`${proseName(home.x)} has `
+    sentences.push(`${proseName(home.x)}'s Search API has `
       + `${home.x.p50 === fastest ? `the lowest median latency, ${latency}` : `a median latency of ${latency}`}`
       + `${price}.`);
   }
   return sentences.join(" ");
+}
+
+function linkFirst(text, links) {
+  const parts = [];
+  let pos = 0;
+  for (const link of links.map(([phrase, href]) => ({ phrase, href, at: text.indexOf(phrase) }))
+    .filter((l) => l.at >= 0).sort((a, b) => a.at - b.at)) {
+    if (link.at < pos) continue;
+    parts.push(text.slice(pos, link.at), link);
+    pos = link.at + link.phrase.length;
+  }
+  parts.push(text.slice(pos));
+  return {
+    html: parts.map((p) => typeof p === "string" ? escapeHtml(p)
+      : `<a href="${escapeHtml(p.href)}">${escapeHtml(p.phrase)}</a>`).join(""),
+    md: parts.map((p) => typeof p === "string" ? p : `[${p.phrase}](${p.href})`).join(""),
+  };
 }
 
 function htmlTable({ caption, head, rows, className }) {
@@ -188,7 +216,7 @@ function bibtex(pageUrl, asOfMonth) {
     "}"].join("\n");
 }
 
-function jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }) {
+function jsonLd({ summary, verticalNames, pageUrl, lastRun, citation }) {
   const percentOfCeiling = (name, description) =>
     ({ "@type": "PropertyValue", name, ...(description && { description }), unitText: "percent of ceiling" });
   const dataset = {
@@ -201,9 +229,10 @@ function jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }) {
       + "for the other verticals.",
     url: pageUrl,
     sameAs: [HF_DATASET],
+    datePublished: DATE_PUBLISHED,
     dateModified: lastRun.toISOString(),
     temporalCoverage: `${summary.window[0].slice(0, 10)}/${summary.window[1].slice(0, 10)}`,
-    license: LICENSE,
+    license: DATA_LICENSE,
     isAccessibleForFree: true,
     creator: { "@id": ORGANIZATION["@id"] },
     author: AUTHORS.map(([given, family]) => ({ "@type": "Person", name: `${given} ${family}` })),
@@ -212,7 +241,7 @@ function jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }) {
       name: "NEEDLE benchmark",
       codeRepository: REPO,
       programmingLanguage: "Python",
-      license: LICENSE,
+      license: CODE_LICENSE,
       identifier: `https://doi.org/${DOI}`,
     },
     measurementTechnique: "Blind LLM judge for News and AgenticRare; known-item matching for Scholar and "
@@ -226,7 +255,7 @@ function jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }) {
       { "@type": "PropertyValue", name: "Unique relevant URLs", unitText: "percent of returned URLs" },
     ],
     distribution: DOWNLOADS.map(([file, encodingFormat]) =>
-      ({ "@type": "DataDownload", encodingFormat, contentUrl: `${base}${file}` })),
+      ({ "@type": "DataDownload", encodingFormat, contentUrl: `${BASE}${file}` })),
     citation,
   };
   const graph = { "@context": "https://schema.org", "@graph": [dataset, ORGANIZATION] };
@@ -267,15 +296,106 @@ function resultsJson({ summary, names, pageUrl, lastRun, pricesAsOf, citation })
       latency_ms: { p50: round(x.p50, 0), p95: round(x.p95, 0) },
       unique_urls_share: round(x.unique, 4),
     })),
-    license: LICENSE,
+    license: DATA_LICENSE,
     citation,
   }, null, 2)}\n`;
 }
 
+function shareAlt(top, date) {
+  for (let n = Math.min(3, top.length); n > 0; n--) {
+    const [first, ...rest] = top.slice(0, n);
+    const alt = `Keenable NEEDLE chart, 7-day mean to ${date}: ${proseName(first)} ${pct(first.overall)} of the ceiling`
+      + rest.map((x) => `, ${proseName(x)} ${pct(x.overall)}`).join("");
+    if (alt.length <= ALT_MAX || n === 1) return alt;
+  }
+  return "";
+}
+
+function shareHtml({ top, engines, caption, logo }) {
+  const rows = top.map((x) => `<div class="row${x.home ? " home" : ""}">`
+    + `<div class="name">${escapeHtml(proseName(x))}</div>`
+    + `<div class="track"><div class="bar" style="width:${(x.overall * 100).toFixed(2)}%"></div>`
+    + `<div class="value">${pct(x.overall)}</div></div></div>`);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Stack+Sans+Headline:wght@400;500&family=TASA+Orbiter:wght@400..800&display=block">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: ${SHARE_SIZE.width}px; height: ${SHARE_SIZE.height}px; background: #ffffff; }
+  body { padding: 52px 64px 44px; color: #2a2a2a; display: flex; flex-direction: column;
+         font-family: "Stack Sans Headline", -apple-system, "Segoe UI", Arial, sans-serif; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; }
+  h1 { margin: 0; font-size: 46px; line-height: 1.1; font-weight: 400; color: #0e0e0e; letter-spacing: -0.01em; }
+  .sub { margin: 10px 0 0; font-size: 24px; color: #646464; }
+  .logo svg { display: block; height: 30px; width: auto; color: #2a2a2a; margin-top: 10px; }
+  .plot { margin-top: 30px; }
+  .row { display: grid; grid-template-columns: 290px 1fr 88px; align-items: center; height: 56px; }
+  .row.axis { height: 30px; }
+  .name { font-size: 28px; white-space: nowrap; overflow: visible; }
+  .home .name { font-weight: 500; color: #0e0e0e; }
+  .track { position: relative; height: 100%; display: flex; align-items: center;
+           border-left: 1px solid #c9ced4; border-right: 1px solid #c9ced4; }
+  .axis .track { border: 0; }
+  .ceiling { position: absolute; right: -1px; bottom: 6px; transform: translateX(50%); font: 500 17px "TASA Orbiter",
+             -apple-system, Arial, sans-serif; color: #646464; white-space: nowrap; }
+  .bar { height: 24px; background: #848a92; border-radius: 0 4px 4px 0; }
+  .home .bar { background: #005cff; }
+  .value { margin-left: 12px; font: 600 26px "TASA Orbiter", -apple-system, Arial, sans-serif; color: #2a2a2a; }
+  footer { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end;
+           font: 400 20px "TASA Orbiter", -apple-system, Arial, sans-serif; color: #646464; }
+</style>
+</head>
+<body>
+<header>
+<div><h1>Web search API benchmark</h1>
+<p class="sub">Overall score as a share of the ceiling, top ${top.length} of ${engines} engines</p></div>
+<div class="logo">${logo ?? ""}</div>
+</header>
+<div class="plot">
+<div class="row axis"><div></div><div class="track"><span class="ceiling">ceiling 100%</span></div></div>
+${rows.join("\n")}
+</div>
+<footer><span>${escapeHtml(caption)}</span></footer>
+</body>
+</html>
+`;
+}
+
+function shareImage({ summary, lastRun, logo }) {
+  const top = summary.engines.filter((x) => x.overall != null)
+    .sort((a, b) => b.overall - a.overall).slice(0, SHARE_TOP);
+  const host = BASE.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const caption = `NEEDLE, 7-day mean, ${DAY.format(lastRun)}, ${host}`;
+  return {
+    path: SHARE_IMAGE,
+    size: SHARE_SIZE,
+    alt: shareAlt(top, DAY.format(lastRun)),
+    html: shareHtml({ top, engines: summary.engines.length, caption, logo }),
+  };
+}
+
+function historySection(history, posts) {
+  if (!history.length) return "";
+  const link = (file, label) => `<a href="../history/${escapeHtml(file)}">${label}</a>`;
+  const items = [...history].sort((a, b) => b.month.localeCompare(a.month)).map(({ month, files }) => {
+    const data = HISTORY_DATA.filter(([ext]) => files[ext]).map(([ext, label]) => link(files[ext], label));
+    const chart = HISTORY_CHART.filter(([ext]) => files[ext]).map(([ext, label]) => link(files[ext], label));
+    const parts = [data.join(", "), chart.length && `chart ${chart.join(", ")}`,
+      posts[month] && `<a href="${escapeHtml(posts[month])}">blog post</a>`].filter(Boolean);
+    return `<li><strong>${MONTH.format(new Date(`${month}-01T00:00:00Z`))}</strong>: ${parts.join("; ")}</li>`;
+  });
+  return ["<h2>History</h2>",
+    "<p>Each month we save the results as they stood at the end of the month: the 7-day mean to its "
+      + "last day. These files are never rewritten.</p>",
+    '<ul class="plain history">', ...items, "</ul>"].join("\n");
+}
+
 export function resultsFiles(template, snapshot) {
-  const { summary, verticals: names, base, pricesAsOf } = snapshot;
+  const { summary, verticals: names, pricesAsOf, families = {}, history = [], posts = {} } = snapshot;
   const lastRun = new Date(snapshot.lastRun);
-  const pageUrl = `${base}results/`;
+  const pageUrl = `${BASE}results/`;
   const cellOf = (x, head) => x.cells[summary.header.indexOf(head)];
   const overall = race("Overall", summary.engines, (x) => ({ score: x.overall, ci: x.ci }));
   const verticals = summary.verticals
@@ -283,12 +403,19 @@ export function resultsFiles(template, snapshot) {
       (x) => ({ score: x.verticals[i]?.share ?? null, ci: x.verticals[i]?.ci ?? null })))
     .filter(Boolean);
   const verticalNames = summary.verticals.map((v) => names[v.key] ?? v.key);
-  const lead = leadText({ summary, overall, verticals, lastRun, cellOf });
+  const home = summary.engines.find((x) => x.home);
+  const authors = listText(AUTHORS.map((a) => a.join(" ")));
+  const lead = linkFirst(leadText({ summary, overall, verticals, lastRun, cellOf }),
+    home ? [[proseName(home), HOME_URL], ["Search API", SEARCH_API_URL]] : []);
   const asOfMonth = MONTH.format(lastRun);
   const citation = citationText(pageUrl, asOfMonth);
-  const home = summary.engines.find((x) => x.home);
-  const rivals = TITLE_RIVALS.map((e) => summary.engines.find((x) => x.engine === e)).filter(Boolean).map(proseName);
+  const rivalEngines = TITLE_RIVALS.map((e) => summary.engines.find((x) => x.engine === e)).filter(Boolean);
+  const rivals = rivalEngines.map(proseName);
   const engines = summary.engines.length;
+  const providerOf = (x) => families[x.engine] ?? x.engine;
+  const moreProviders = home ? new Set(summary.engines.map(providerOf)).size
+    - new Set([home, ...rivalEngines].map(providerOf)).size : 0;
+  const share = shareImage({ summary, lastRun, logo: snapshot.logo });
   const updated = `${DAY_TIME.format(lastRun)} UTC`;
   const runs = summary.verticals.map((v) => `${names[v.key] ?? v.key} ${v.runs}`
     + `${v.lastRun ? ` (latest ${SHORT_TIME.format(new Date(v.lastRun))} UTC)` : ""}`);
@@ -297,7 +424,9 @@ export function resultsFiles(template, snapshot) {
       ? `Web Search API Benchmark ${lastRun.getUTCFullYear()}: ${proseName(home)} vs ${rivals.slice(0, 3).join(", ")}`
       : `Web Search API Benchmark ${lastRun.getUTCFullYear()}: ${engines} engines compared`,
     H1: home && rivals.length
-      ? `Web search API benchmark results: ${proseName(home)} vs ${rivals.join(", ")} and ${engines - 1 - rivals.length} more`
+      ? `Web search API benchmark results: ${proseName(home)} vs ${moreProviders
+        ? `${rivals.join(", ")} and ${moreProviders} more ${moreProviders === 1 ? "provider" : "providers"}`
+        : listText(rivals)}`
       : `Web search API benchmark results: ${engines} engines compared`,
     DESCRIPTION: `NEEDLE benchmark results: ${engines} web search APIs for AI agents compared on quality in `
       + `${verticals.length} verticals, price per 1,000 queries and latency. Updated ${DAY.format(lastRun)}.`,
@@ -305,10 +434,17 @@ export function resultsFiles(template, snapshot) {
       + `Updated ${DAY.format(lastRun)}.`,
     ENGINES: String(engines),
     VERTICALS: verticalNames.join(", "),
-    AUTHORS: listText(AUTHORS.map((a) => a.join(" "))),
+    AUTHORS: authors,
+    HOME_URL,
+    DATA_LICENSE,
+    CODE_LICENSE,
+    SHARE_PNG: `${BASE}${share.path}.png`,
+    SHARE_WEBP: `../${share.path}.webp`,
+    SHARE_WIDTH: String(share.size.width),
+    SHARE_HEIGHT: String(share.size.height),
+    SHARE_ALT: share.alt,
     LAST_RUN: lastRun.toISOString(),
     UPDATED: updated,
-    LEAD: lead,
     RUNS: `Runs behind the 7-day means: ${runs.join(", ")}.`,
     PRICES_ASOF: pricesAsOf,
     CITATION: citation,
@@ -317,9 +453,11 @@ export function resultsFiles(template, snapshot) {
   };
   const html = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, escapeHtml(v)]));
   Object.assign(html, {
-    BASE: escapeHtml(base),
+    BASE: escapeHtml(BASE),
     PAGE_URL: escapeHtml(pageUrl),
-    JSON_LD: jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }),
+    LEAD: lead.html,
+    HISTORY: historySection(history, posts),
+    JSON_LD: jsonLd({ summary, verticalNames, pageUrl, lastRun, citation }),
     LEADERS_TABLE: leadersTable(overall, verticals),
     TABLE: resultsTable(summary, `NEEDLE web search API benchmark, last 7 days to ${updated}: share of the `
       + `ceiling by vertical, price, latency and result uniqueness for ${engines} engines. The best value in `
@@ -331,7 +469,13 @@ export function resultsFiles(template, snapshot) {
   });
   return {
     page,
-    lead,
+    markdown: {
+      byline: `By ${authors}, [Keenable](${HOME_URL}).`,
+      lead: lead.md,
+      license: `The results data is licensed under [CC BY 4.0](${DATA_LICENSE}); the NEEDLE code is under the `
+        + `[MIT License](${CODE_LICENSE}).`,
+    },
+    share,
     csv: resultsCsv(summary),
     json: resultsJson({ summary, names, pageUrl, lastRun, pricesAsOf, citation }),
   };

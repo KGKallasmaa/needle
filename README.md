@@ -264,6 +264,20 @@ the queries evaluated by runs from the last 24 hours
 workflow needs repo secrets `OPENROUTER_API_KEY`, `HF_TOKEN`, and the
 per-engine keys.
 
+The deployed site also serves the results page at
+<https://keenableai.github.io/needle/results/> with `results.csv`,
+`results.json`, `results.md` and `results.pdf`, rebuilt on every deploy.
+[`snapshot.yaml`](.github/workflows/snapshot.yaml) runs on the 1st of each
+month and saves the month before as it stood at its end (the 7-day mean to
+its last day) under `history/` on `gh-pages`:
+`needle-results-YYYY-MM.{csv,json,md}` and
+`needle-overall-YYYY-MM.{webp,png}`. It renders the gh-pages state from
+just before the next month's first run with the browser clock set to the
+month's end, and it never overwrites a month that already exists. The
+results page lists the months in its History section; add a month's blog
+post to [`dashboard/history_posts.json`](dashboard/history_posts.json) as
+`{"YYYY-MM": "https://..."}`.
+
 ## Development
 
 ```bash
@@ -285,4 +299,7 @@ uv run pytest   # deterministic, no network
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Code: MIT — see [LICENSE](LICENSE). Benchmark results data (the dashboard
+data, the results page files, the monthly snapshots and the
+[`keenable-ai/needle-results`](https://huggingface.co/datasets/keenable-ai/needle-results)
+dataset): [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
