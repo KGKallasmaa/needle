@@ -3053,13 +3053,14 @@ function md(node) {
   return walk(node).replace(/\s+/g, " ").trim();
 }
 
-function buildMarkdown({ byline, lead, license } = {}) {
+function buildMarkdown({ byline, lead, license }) {
   drawAllTrends?.();
   const header = document.getElementById("top");
   const lines = [`# ${md(header.querySelector("h1"))}`];
   const push = (...blocks) => { for (const b of blocks) if (b) lines.push("", b); };
+  const mdHtml = (html) => html && md(Object.assign(document.createElement("div"), { innerHTML: html }));
 
-  push(byline, md(header.querySelector(".lastrun")), lead);
+  push(mdHtml(byline), md(header.querySelector(".lastrun")), mdHtml(lead));
   for (const n of header.querySelectorAll(".fm > p:not(.lastrun), .fm > ul")) {
     push(n.tagName === "UL" ? [...n.children].map((li) => `- ${md(li)}`).join("\n") : md(n));
   }
@@ -3085,7 +3086,7 @@ function buildMarkdown({ byline, lead, license } = {}) {
     else if (n.matches("p.section-desc")) push(md(n));
     else if (n.matches(".card")) pushCard(n, 3);
   }
-  push(license);
+  push(mdHtml(license));
   return lines.join("\n") + "\n";
 }
 

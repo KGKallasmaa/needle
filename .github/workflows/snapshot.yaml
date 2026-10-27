@@ -28,6 +28,7 @@ jobs:
         with:
           ref: gh-pages
           path: site-data
+          filter: blob:none
       - uses: astral-sh/setup-uv@v5
       - name: Build the snapshot
         env:

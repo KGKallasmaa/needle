@@ -8,7 +8,7 @@ const root = resolve(rootArg);
 const indexPath = join(root, "index.html");
 const resultsTemplate = new URL("../dashboard/results.html", import.meta.url);
 const historyPosts = new URL("../dashboard/history_posts.json", import.meta.url);
-const HISTORY_FILE = /^needle-(?:results|overall)-(\d{4}-\d{2})\.(csv|json|md|webp|png)$/;
+const HISTORY_FILE = /^needle-[a-z]+-(\d{4}-\d{2})\.([a-z]+)$/;
 const MARKDOWN_LINK =
   '<link rel="alternate" type="text/markdown" href="results.md" title="NEEDLE results as Markdown">';
 const RESULTS_LINK = ' <a href="results/">Results table</a>.';
@@ -61,8 +61,9 @@ const readSnapshot = (page) => page.evaluate(() => {
     summary: document.getElementById("card-standings")._summaryData?.() ?? null,
     lastRun: new Date(history[history.length - 1].ts).toISOString(),
     pricesAsOf: PRICES_ASOF,
+    base: document.querySelector('meta[property="og:url"]').content,
     families: Object.fromEntries(ENGINE_FAMILY),
-    logo: document.querySelector(".brand svg")?.outerHTML ?? null,
+    logo: document.querySelector(".brand svg")?.outerHTML ?? "",
   };
 });
 

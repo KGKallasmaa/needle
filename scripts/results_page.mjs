@@ -1,4 +1,3 @@
-export const BASE = "https://keenableai.github.io/needle/";
 const AUTHORS = [["Andrey", "Styskin"], ["Matthias", "Petri"], ["Ilya", "Gusev"]];
 const DOI = "10.5281/zenodo.22095155";
 const DATA_LICENSE = "https://creativecommons.org/licenses/by/4.0/";
@@ -124,20 +123,15 @@ function leadText({ summary, overall, verticals, lastRun, cellOf }) {
 }
 
 function linkFirst(text, links) {
-  const parts = [];
+  let html = "";
   let pos = 0;
   for (const link of links.map(([phrase, href]) => ({ phrase, href, at: text.indexOf(phrase) }))
     .filter((l) => l.at >= 0).sort((a, b) => a.at - b.at)) {
     if (link.at < pos) continue;
-    parts.push(text.slice(pos, link.at), link);
+    html += `${escapeHtml(text.slice(pos, link.at))}<a href="${escapeHtml(link.href)}">${escapeHtml(link.phrase)}</a>`;
     pos = link.at + link.phrase.length;
   }
-  parts.push(text.slice(pos));
-  return {
-    html: parts.map((p) => typeof p === "string" ? escapeHtml(p)
-      : `<a href="${escapeHtml(p.href)}">${escapeHtml(p.phrase)}</a>`).join(""),
-    md: parts.map((p) => typeof p === "string" ? p : `[${p.phrase}](${p.href})`).join(""),
-  };
+  return html + escapeHtml(text.slice(pos));
 }
 
 function htmlTable({ caption, head, rows, className }) {
@@ -216,7 +210,7 @@ function bibtex(pageUrl, asOfMonth) {
     "}"].join("\n");
 }
 
-function jsonLd({ summary, verticalNames, pageUrl, lastRun, citation }) {
+function jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }) {
   const percentOfCeiling = (name, description) =>
     ({ "@type": "PropertyValue", name, ...(description && { description }), unitText: "percent of ceiling" });
   const dataset = {
@@ -255,7 +249,7 @@ function jsonLd({ summary, verticalNames, pageUrl, lastRun, citation }) {
       { "@type": "PropertyValue", name: "Unique relevant URLs", unitText: "percent of returned URLs" },
     ],
     distribution: DOWNLOADS.map(([file, encodingFormat]) =>
-      ({ "@type": "DataDownload", encodingFormat, contentUrl: `${BASE}${file}` })),
+      ({ "@type": "DataDownload", encodingFormat, contentUrl: `${base}${file}` })),
     citation,
   };
   const graph = { "@context": "https://schema.org", "@graph": [dataset, ORGANIZATION] };
@@ -351,7 +345,7 @@ function shareHtml({ top, engines, caption, logo }) {
 <header>
 <div><h1>Web search API benchmark</h1>
 <p class="sub">Overall score as a share of the ceiling, top ${top.length} of ${engines} engines</p></div>
-<div class="logo">${logo ?? ""}</div>
+<div class="logo">${logo}</div>
 </header>
 <div class="plot">
 <div class="row axis"><div></div><div class="track"><span class="ceiling">ceiling 100%</span></div></div>
@@ -363,16 +357,15 @@ ${rows.join("\n")}
 `;
 }
 
-function shareImage({ summary, lastRun, logo }) {
-  const top = summary.engines.filter((x) => x.overall != null)
-    .sort((a, b) => b.overall - a.overall).slice(0, SHARE_TOP);
-  const host = BASE.replace(/^https?:\/\//, "").replace(/\/$/, "");
+function shareImage({ overall, engines, lastRun, base, logo }) {
+  const top = overall.list.slice(0, SHARE_TOP).map((s) => s.x);
+  const host = base.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const caption = `NEEDLE, 7-day mean, ${DAY.format(lastRun)}, ${host}`;
   return {
     path: SHARE_IMAGE,
     size: SHARE_SIZE,
     alt: shareAlt(top, DAY.format(lastRun)),
-    html: shareHtml({ top, engines: summary.engines.length, caption, logo }),
+    html: shareHtml({ top, engines, caption, logo }),
   };
 }
 
@@ -380,9 +373,9 @@ function historySection(history, posts) {
   if (!history.length) return "";
   const link = (file, label) => `<a href="../history/${escapeHtml(file)}">${label}</a>`;
   const items = [...history].sort((a, b) => b.month.localeCompare(a.month)).map(({ month, files }) => {
-    const data = HISTORY_DATA.filter(([ext]) => files[ext]).map(([ext, label]) => link(files[ext], label));
-    const chart = HISTORY_CHART.filter(([ext]) => files[ext]).map(([ext, label]) => link(files[ext], label));
-    const parts = [data.join(", "), chart.length && `chart ${chart.join(", ")}`,
+    const links = (kinds) => kinds.filter(([ext]) => files[ext]).map(([ext, label]) => link(files[ext], label));
+    const chart = links(HISTORY_CHART);
+    const parts = [links(HISTORY_DATA).join(", "), chart.length && `chart ${chart.join(", ")}`,
       posts[month] && `<a href="${escapeHtml(posts[month])}">blog post</a>`].filter(Boolean);
     return `<li><strong>${MONTH.format(new Date(`${month}-01T00:00:00Z`))}</strong>: ${parts.join("; ")}</li>`;
   });
@@ -393,9 +386,9 @@ function historySection(history, posts) {
 }
 
 export function resultsFiles(template, snapshot) {
-  const { summary, verticals: names, pricesAsOf, families = {}, history = [], posts = {} } = snapshot;
+  const { summary, verticals: names, base, pricesAsOf, families, history, posts } = snapshot;
   const lastRun = new Date(snapshot.lastRun);
-  const pageUrl = `${BASE}results/`;
+  const pageUrl = `${base}results/`;
   const cellOf = (x, head) => x.cells[summary.header.indexOf(head)];
   const overall = race("Overall", summary.engines, (x) => ({ score: x.overall, ci: x.ci }));
   const verticals = summary.verticals
@@ -404,7 +397,6 @@ export function resultsFiles(template, snapshot) {
     .filter(Boolean);
   const verticalNames = summary.verticals.map((v) => names[v.key] ?? v.key);
   const home = summary.engines.find((x) => x.home);
-  const authors = listText(AUTHORS.map((a) => a.join(" ")));
   const lead = linkFirst(leadText({ summary, overall, verticals, lastRun, cellOf }),
     home ? [[proseName(home), HOME_URL], ["Search API", SEARCH_API_URL]] : []);
   const asOfMonth = MONTH.format(lastRun);
@@ -415,7 +407,10 @@ export function resultsFiles(template, snapshot) {
   const providerOf = (x) => families[x.engine] ?? x.engine;
   const moreProviders = home ? new Set(summary.engines.map(providerOf)).size
     - new Set([home, ...rivalEngines].map(providerOf)).size : 0;
-  const share = shareImage({ summary, lastRun, logo: snapshot.logo });
+  const byline = linkFirst(`By ${listText(AUTHORS.map((a) => a.join(" ")))}, Keenable.`, [["Keenable", HOME_URL]]);
+  const license = linkFirst("The data is licensed under CC BY 4.0; the NEEDLE code is under the MIT License.",
+    [["CC BY 4.0", DATA_LICENSE], ["MIT License", CODE_LICENSE]]);
+  const share = shareImage({ overall, engines, lastRun, base, logo: snapshot.logo });
   const updated = `${DAY_TIME.format(lastRun)} UTC`;
   const runs = summary.verticals.map((v) => `${names[v.key] ?? v.key} ${v.runs}`
     + `${v.lastRun ? ` (latest ${SHORT_TIME.format(new Date(v.lastRun))} UTC)` : ""}`);
@@ -434,14 +429,10 @@ export function resultsFiles(template, snapshot) {
       + `Updated ${DAY.format(lastRun)}.`,
     ENGINES: String(engines),
     VERTICALS: verticalNames.join(", "),
-    AUTHORS: authors,
-    HOME_URL,
-    DATA_LICENSE,
-    CODE_LICENSE,
-    SHARE_PNG: `${BASE}${share.path}.png`,
-    SHARE_WEBP: `../${share.path}.webp`,
-    SHARE_WIDTH: String(share.size.width),
-    SHARE_HEIGHT: String(share.size.height),
+    SHARE_PNG: `${base}${SHARE_IMAGE}.png`,
+    SHARE_WEBP: `../${SHARE_IMAGE}.webp`,
+    SHARE_WIDTH: String(SHARE_SIZE.width),
+    SHARE_HEIGHT: String(SHARE_SIZE.height),
     SHARE_ALT: share.alt,
     LAST_RUN: lastRun.toISOString(),
     UPDATED: updated,
@@ -453,11 +444,13 @@ export function resultsFiles(template, snapshot) {
   };
   const html = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, escapeHtml(v)]));
   Object.assign(html, {
-    BASE: escapeHtml(BASE),
+    BASE: escapeHtml(base),
     PAGE_URL: escapeHtml(pageUrl),
-    LEAD: lead.html,
+    BYLINE: byline,
+    LEAD: lead,
+    LICENSE: license,
     HISTORY: historySection(history, posts),
-    JSON_LD: jsonLd({ summary, verticalNames, pageUrl, lastRun, citation }),
+    JSON_LD: jsonLd({ summary, verticalNames, pageUrl, base, lastRun, citation }),
     LEADERS_TABLE: leadersTable(overall, verticals),
     TABLE: resultsTable(summary, `NEEDLE web search API benchmark, last 7 days to ${updated}: share of the `
       + `ceiling by vertical, price, latency and result uniqueness for ${engines} engines. The best value in `
@@ -469,12 +462,7 @@ export function resultsFiles(template, snapshot) {
   });
   return {
     page,
-    markdown: {
-      byline: `By ${authors}, [Keenable](${HOME_URL}).`,
-      lead: lead.md,
-      license: `The results data is licensed under [CC BY 4.0](${DATA_LICENSE}); the NEEDLE code is under the `
-        + `[MIT License](${CODE_LICENSE}).`,
-    },
+    markdown: { byline, lead, license },
     share,
     csv: resultsCsv(summary),
     json: resultsJson({ summary, names, pageUrl, lastRun, pricesAsOf, citation }),

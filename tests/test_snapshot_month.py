@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from needle.shared.overlap import TS_FMT
+
 SPEC = importlib.util.spec_from_file_location(
     "snapshot_month", Path(__file__).parents[1] / "scripts" / "snapshot_month.py"
 )
@@ -12,9 +14,8 @@ snapshot_month = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(snapshot_month)
 
 
-def test_previous_month_wraps_the_year():
-    assert snapshot_month.previous_month(datetime(2026, 11, 1, 2, 41, tzinfo=UTC)) == "2026-10"
-    assert snapshot_month.previous_month(datetime(2027, 1, 1, tzinfo=UTC)) == "2026-12"
+def test_bench_timestamps_match_publish_bench():
+    assert snapshot_month.TS_FMT == TS_FMT
 
 
 def test_month_end_is_the_next_month_start():

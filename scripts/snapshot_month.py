@@ -22,11 +22,6 @@ FILES = {
 }
 
 
-def previous_month(now: datetime) -> str:
-    year, month = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
-    return f"{year:04d}-{month:02d}"
-
-
 def month_end(month: str) -> datetime:
     if not MONTH_RE.fullmatch(month):
         raise SystemExit(f"month must be YYYY-MM, got {month!r}")
@@ -43,13 +38,12 @@ def existing(history: Path, month: str) -> list[Path]:
 
 
 def end_of_month_commit(log: list[tuple[str, str, str]], cutoff: str) -> str:
-    state = log[0][0] if log else None
+    state = log[0][0] if log else ""
     for _, parent, subject in log:
         m = BENCH_SUBJECT.fullmatch(subject)
         if not m:
             continue
         if m.group(1) < cutoff:
-            assert state
             return state
         state = parent
     raise SystemExit(f"no bench run before {cutoff} in the fetched gh-pages history; fetch deeper")
@@ -80,11 +74,9 @@ def extract_data(site: Path, sha: str, out: Path) -> None:
         raise SystemExit(f"git archive {sha} failed")
 
 
-def build(site: str, out: str, month: str | None) -> None:
-    now = datetime.now(UTC)
-    month = month or previous_month(now)
+def build(site: str, out: str, month: str) -> None:
     cutoff = month_end(month)
-    if cutoff > now:
+    if cutoff > datetime.now(UTC):
         raise SystemExit(f"{month} is not over yet")
     site_dir, out_dir = Path(site), Path(out)
     shutil.rmtree(out_dir, ignore_errors=True)
@@ -99,8 +91,7 @@ def build(site: str, out: str, month: str | None) -> None:
     print(f"built {month} from gh-pages {sha[:8]}, clock at {cutoff.isoformat()}")
 
 
-def store(site: str, out: str, month: str | None) -> None:
-    month = month or previous_month(datetime.now(UTC))
+def store(site: str, out: str, month: str) -> None:
     history = Path(site) / "history"
     if found := existing(history, month):
         print(f"{month} snapshot already exists ({found[0].name}), left as is")
@@ -120,7 +111,7 @@ def main(argv: list[str]) -> None:
     parser.add_argument("command", choices=["build", "store"])
     parser.add_argument("--site", required=True)
     parser.add_argument("--out", required=True)
-    parser.add_argument("--month")
+    parser.add_argument("--month", required=True)
     args = parser.parse_args(argv)
     {"build": build, "store": store}[args.command](args.site, args.out, args.month)
 
