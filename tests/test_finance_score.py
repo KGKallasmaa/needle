@@ -106,14 +106,16 @@ async def test_run_answers_metrics_and_breakdowns():
     )
     report = await run_answers([CEO_Q, REV_Q, EMP_Q], {"fake": engine}, num_results=5)
     e = report["engines"]["fake"]
-    assert e["num_scored"] == 3
+    assert e["num_scored"] == 2
     assert e["search_errors"] == 1
-    assert e["recall_at_k"] == pytest.approx(2 / 3)
-    assert e["mrr_at_k"] == pytest.approx((1 / 2 + 1 / 1) / 3)
+    assert e["recall_at_k"] == pytest.approx(1.0)
+    assert e["mrr_at_k"] == pytest.approx((1 / 2 + 1 / 1) / 2)
     assert e["by_field"]["ceo"] == {"n": 1, "recall_at_k": 1.0}
-    assert e["by_field"]["employees"] == {"n": 1, "recall_at_k": 0.0}
+    assert "employees" not in e["by_field"]
     assert e["by_bucket"]["filings"]["recall_at_k"] == 1.0
-    assert e["by_freshness"]["1y"]["n"] == 3
+    assert e["by_freshness"]["1y"]["n"] == 2
+    errored = next(pq for pq in e["per_query"] if pq["query"] == EMP_Q.text)
+    assert errored["score"] is None
     assert report["num_queries"] == 3
 
 
@@ -134,7 +136,8 @@ async def test_run_answers_zero_queries_and_all_errors():
     engine = FakeEngine({CEO_Q.text: (None, {"error_type": "transport", "error_message": "x"})})
     report = await run_answers([CEO_Q], {"fake": engine})
     e = report["engines"]["fake"]
-    assert e["recall_at_k"] == 0.0 and e["mrr_at_k"] == 0.0 and e["num_scored"] == 1
+    assert e["recall_at_k"] == 0.0 and e["mrr_at_k"] == 0.0 and e["num_scored"] == 0
+    assert e["search_errors"] == 1
 
 
 async def test_run_answers_reports_latency():
@@ -284,10 +287,10 @@ async def test_run_answers_ultimate_pools_hits_across_engines():
     assert pq["n_results"] == 2
 
 
-async def test_run_answers_ultimate_scores_zero_when_all_engines_fail():
+async def test_run_answers_ultimate_excludes_query_when_all_engines_fail():
     err = FakeEngine({CEO_Q.text: (None, {"error_type": "transport", "error_message": "x"})})
     report = await run_answers([CEO_Q], {"e": err})
     ult = report["engines"]["ultimate"]
-    assert ult["num_scored"] == 1
+    assert ult["num_scored"] == 0
     assert ult["search_errors"] == 1
     assert ult["recall_at_k"] == 0.0
