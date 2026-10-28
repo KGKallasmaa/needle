@@ -18,6 +18,7 @@ needle <benchmark> run --queries queries.jsonl ...    # evaluate engines on them
 | [`finance`](#finance) | company and financial fact lookups, gold from public registries and SEC filings | answer-recall@K + MRR@K, deterministic (optional LLM backstop) |
 | [`scholar`](#scholar) | known-item paper retrieval: by title vs. by a full-text-only detail | recall@K + MRR@K by paper-id match |
 | [`legal`](#legal) | known-item caselaw / CFR retrieval | recall@K + MRR@K by citation/docket/URL identity |
+| [`coding`](#coding) | known-item documentation-page retrieval: by title vs. by the task a coding agent is doing | recall@K + MRR@K by page URL match |
 | [`agentic_rare`](#agentic_rare) | English rare-word queries sampled from a filtered query stream | LLM relevance judge → nDCG@5 |
 
 Each bench generates gold on demand from public sources; the repo commits
@@ -36,7 +37,7 @@ The CLI loads `.env` from the working directory (copy
 
 | Variable | Purpose |
 | --- | --- |
-| `OPENROUTER_API_KEY` | all LLM work — query projection (news, finance `filingdoc`, scholar, legal `code`) and judging |
+| `OPENROUTER_API_KEY` | all LLM work — query projection (news, finance `filingdoc`, scholar, legal `code`, coding `task`) and judging |
 | `EXA_API_KEY`, `SERPER_API_KEY` (`google`), `SEARCHAPI_API_KEY` (`bing`), `BRAVE_API_KEY`, `PARALLEL_API_KEY`, `TAVILY_API_KEY`, `PERPLEXITY_API_KEY`, `OCTEN_API_KEY`, `CERAMIC_API_KEY`, `YOU_API_KEY`, `FIRECRAWL_API_KEY`, `TINYFISH_API_KEY`, `KAGI_API_KEY`, `JINA_API_KEY`, `ANTHROPIC_API_KEY` (`claude-search`), `OPENAI_API_KEY` (`chatgpt-search`) | one per engine, required when that engine is in `--engines` |
 | `KEENABLE_API_KEY` | optional — without it the CLI uses the keyless, rate-limited endpoint |
 | `NEEDLE_LLM_MODEL`, `NEEDLE_JUDGE_MODEL` | both default to `openai/gpt-5.6-terra`; `--llm-model` / `--judge-model` override |
@@ -190,6 +191,34 @@ result URLs and snippets for reporter citations, docket numbers (scored only
 next to a gold party token), CourtListener/Justia URLs, and CFR citations;
 it breaks down by suite, syntax, and court.
 
+## coding
+
+Known-item documentation lookup, the retrieval a coding assistant does
+when it needs one page from a product's docs. Gold is that page's host
+and path. A hit is a result whose URL or snippet is that page. A
+different path, including another version of the same page, is a miss.
+
+```bash
+needle coding generate --per-host 4 --out coding.jsonl
+needle coding run --queries coding.jsonl --out coding.json
+needle coding generate --slices title --per-host 2 --hosts firecrawl --out coding.jsonl
+```
+
+`generate` reads public `/llms.txt` indexes from Mintlify-hosted docs
+(`firecrawl`, `browserbase`, `resend`, `langchain`; `--hosts`). When an
+index points at a `/_llms/` tree, that tree is the corpus and inline
+legacy pages are left out. Translated trees (`/fr/`, `/es/`, …) are
+left out when an English index exists. Each kept page yields two slices.
+**`title`** is the product name, the section, and the page title.
+The section is the nearest heading, or the parent path when the index
+is a flat list. **`task`** is an LLM query a coding agent would issue for the
+page; the bench rejects it when the
+query omits the product name, copies the heading, or contains the host,
+path, or hyphenated slug, and drops the title row with it. `run` matches
+the host and path (`page.md`, a trailing slash, and a query string still
+match) and breaks recall down by slice. `--slices title` skips the
+LLM, so one engine can be smoked on the easy slice alone.
+
 ## agentic_rare
 
 A query producer plus a news-style eval for English rare-word queries.
@@ -244,8 +273,8 @@ the overlap and uniqueness stats exclude it.
 
 [`bench.yaml`](.github/workflows/bench.yaml) runs against all registered
 engines: news hourly (`--limit 20`); daily with fresh gold — finance 00:17
-UTC (`--limit 120 --judge`), agentic_rare 06:17 (`--limit 100`), scholar
-12:17 (`--per-cell 7`), legal 18:17. Gold lives on `gh-pages` between runs;
+UTC (`--limit 120 --judge`), coding 03:17 (`--per-host 4`), agentic_rare
+06:17 (`--limit 100`), scholar 12:17 (`--per-cell 7`), legal 18:17. Gold lives on `gh-pages` between runs;
 a daily bench also runs off-schedule when a manual dispatch selects it or
 when its gold file is missing. Each bench is its own job and publishes its
 own run, so a slow daily bench never delays the hourly news result. Each
