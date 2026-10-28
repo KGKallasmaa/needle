@@ -224,6 +224,12 @@ rejected task drops that page's title row too. A query that repeats one
 already kept is skipped, and the next candidate fills the slot. `run`
 reports recall@5 and MRR@5 by slice. `--slices title` skips the LLM.
 
+The 03:17 UTC job sends those queries to every engine in the daily
+field, the same list as the other benches. One engine's failure stays a
+search error on that engine. The archived report keeps, for each
+engine, the gold page and the rank of the first hit, so a miss is a
+docs page that engine did not return.
+
 ## agentic_rare
 
 A query producer plus a news-style eval for English rare-word queries.
