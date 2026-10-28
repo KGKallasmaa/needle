@@ -15,8 +15,10 @@ the filtered artifact and evaluates it like news.
 - `dashboard/index.html` — the whole dashboard: one self-contained static
   page, vanilla JS, no build step; the bench workflow deploys it to gh-pages.
 - Dashboard data: `scripts/publish_bench.py` publishes `data/history.jsonl`,
-  `overlap.jsonl`, `uniqueness.jsonl`, `latest_*.json`, `runs.json`, and
-  `families.json`; per-run artifacts live on the HF dataset
+  `overlap.jsonl`, `uniqueness.jsonl`, `independence.json` (their
+  all-runs and last-7-days totals, the only form the dashboard loads),
+  `latest_*.json`, `runs.json`, and `families.json`; `history.jsonl`
+  keeps raw `lat_ms` samples only for the last 7 days; per-run artifacts live on the HF dataset
   `keenable-ai/needle-results` as a slim `<bench>.json` whose engine
   entries carry `per_query_path` pointing at `<bench>/<engine>.json`; the
   dashboard follows the pointer, and `needle.shared.hf.fetch_report` merges
