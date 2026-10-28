@@ -270,7 +270,8 @@ per-engine keys.
 
 The deployed site also serves the results page at
 <https://keenableai.github.io/needle/results/> with `results.csv`,
-`results.json`, `results.md` and `results.pdf`, rebuilt on every deploy.
+`results.json`, `results.md` and `results.pdf`, rebuilt on every deploy,
+plus a `sitemap.xml` that lists the dashboard and the results page.
 [`snapshot.yaml`](.github/workflows/snapshot.yaml) runs on the 1st of each
 month and saves the month before as it stood at its end (the 7-day mean to
 its last day) under `history/` on `gh-pages`:

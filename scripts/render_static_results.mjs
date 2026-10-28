@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { withDashboard } from "./dashboard_page.mjs";
-import { resultsFiles } from "./results_page.mjs";
+import { resultsFiles, sitemapXml } from "./results_page.mjs";
 
 const [rootArg, now] = process.argv.slice(2);
 const root = resolve(rootArg);
@@ -141,6 +141,8 @@ try {
       await writeFile(join(root, `${results.share.path}.webp`), share.webp);
     }
     await writeFile(join(root, "results.md"), markdown);
+    await writeFile(join(root, "sitemap.xml"),
+      sitemapXml([snapshot.base, ...(results ? [`${snapshot.base}results/`] : [])], snapshot.lastRun));
     await writeFile(indexPath, doc);
     for (const id of snapshot.missing) console.error(`no rows for #${id}, left empty`);
     if (!results) warn("no standings in the last 7 days, results/ not written");
@@ -148,7 +150,7 @@ try {
       + (results ? `results/ (${snapshot.summary.engines.length} engines, ${snapshot.history.length} `
                    + `history months), csv, json, pdf, ${results.share.path}.png/.webp`
                  : "no results/ (no standings)")
-      + " and results.md");
+      + ", results.md and sitemap.xml");
   });
 } catch (e) {
   warn(`static results failed, index.html left as is: ${e.message.split("\n")[0]}`);
