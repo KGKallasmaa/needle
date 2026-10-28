@@ -123,13 +123,13 @@ def test_publish_trims_old_latency_and_writes_independence(tmp_path):
     ndcg = tmp_path / "ndcg.json"
     ndcg.write_text(json.dumps(report), encoding="utf-8")
     site = tmp_path / "site"
-    for ts in ("2026-08-01T00:00Z", "2026-08-08T00:00Z", "2026-08-09T00:00Z"):
+    for ts in ("2026-08-01T00:00Z", "2026-08-08T00:00Z", "2026-08-09T00:00Z", "2026-08-01T00:00Z"):
         publish_bench.publish(
             site=str(site), runs_out=str(tmp_path / "runs"), ndcg=str(ndcg), ts=ts
         )
     data = site / "data"
     history = [json.loads(line) for line in (data / "history.jsonl").read_text().splitlines()]
-    assert [("lat_ms" in r) for r in history] == [False, False, True, True, True, True]
+    assert [("lat_ms" in r) for r in history] == [True, True, True, True, False, False]
     assert all(r["p50_ms"] == 100 for r in history)
     independence = json.loads((data / "independence.json").read_text(encoding="utf-8"))
     assert independence["all"]["overlap"][0]["union_urls"] == 3

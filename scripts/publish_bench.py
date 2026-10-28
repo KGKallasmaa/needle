@@ -204,8 +204,9 @@ def publish(
 
     republish = any(r.get("id") == run_id for r in runs)
 
-    week_start = (datetime.strptime(ts, TS_FMT) - timedelta(days=7)).strftime(TS_FMT)
     history = _merged_rows(data / "history.jsonl", rows, ts, republish)
+    newest = max((row["ts"] for row in history), default=ts)
+    week_start = (datetime.strptime(newest, TS_FMT) - timedelta(days=7)).strftime(TS_FMT)
     for row in history:
         if row["ts"] < week_start:
             row.pop("lat_ms", None)
