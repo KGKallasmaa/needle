@@ -193,10 +193,12 @@ it breaks down by suite, syntax, and court.
 
 ## coding
 
-Known-item documentation lookup, the retrieval a coding assistant does
-when it needs one page from a product's docs. Gold is that page's host
-and path. A hit is a result whose URL or snippet is that page. A
-different path, including another version of the same page, is a miss.
+Known-item documentation lookup. A coding assistant needs one English
+page from a product's docs, and the bench asks whether the top 5 contain
+that page. Gold is the host and path. A hit is that page in a result URL
+or in the snippet. Scheme, a `.md` suffix, a trailing slash, and a query
+string still match. Path case is part of the identity. A different path
+is a miss, including another version or a translation.
 
 ```bash
 needle coding generate --per-host 4 --out coding.jsonl
@@ -204,20 +206,23 @@ needle coding run --queries coding.jsonl --out coding.json
 needle coding generate --slices title --per-host 2 --hosts firecrawl --out coding.jsonl
 ```
 
-`generate` reads public `/llms.txt` indexes from Mintlify-hosted docs
-(`firecrawl`, `browserbase`, `resend`, `langchain`; `--hosts`). When an
-index points at a `/_llms/` tree, that tree is the corpus and inline
-legacy pages are left out. Translated trees (`/fr/`, `/es/`, …) are
-left out when an English index exists. Each kept page yields two slices.
-**`title`** is the product name, the section, and the page title.
-The section is the nearest heading, or the parent path when the index
-is a flat list. **`task`** is an LLM query a coding agent would issue for the
-page; the bench rejects it when the
-query omits the product name, copies the heading, or contains the host,
-path, or hyphenated slug, and drops the title row with it. `run` matches
-the host and path (`page.md`, a trailing slash, and a query string still
-match) and breaks recall down by slice. `--slices title` skips the
-LLM, so one engine can be smoked on the easy slice alone.
+`generate` reads public `/llms.txt` indexes. The current hosts are
+Mintlify-hosted docs (`firecrawl`, `browserbase`, `resend`,
+`langchain`); `--hosts` is how that set changes. A
+`/_llms/` tree replaces inline legacy pages. When an English index
+exists, translated trees are left out. A child index keeps the pages it
+lists and still follows its nested indexes.
+
+Each kept page yields two slices. **`title`** is the product name, the
+section, and the page title. The section is the nearest heading, or the
+parent path when the index is a flat list. **`task`** is a 6–14 word
+keyword query a coding agent would issue. The bench rejects it when it
+starts with what, why, or how, omits the product name, copies the title
+(the whole title when it is shorter than four words, otherwise any
+four-word span), or contains the host, path, or hyphenated slug. A
+rejected task drops that page's title row too. A query that repeats one
+already kept is skipped, and the next candidate fills the slot. `run`
+reports recall@5 and MRR@5 by slice. `--slices title` skips the LLM.
 
 ## agentic_rare
 

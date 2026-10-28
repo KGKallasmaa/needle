@@ -14,6 +14,7 @@ from needle.coding.projection import (
 )
 from needle.coding.sources import MintlifyClient, english_indexes, page_body, parse_llms
 from needle.shared.concurrency import bounded_gather
+from needle.shared.identity import canonicalize
 from needle.shared.llm import LLMClient
 from needle.shared.sampling import dedupe_by, shuffle_indices
 
@@ -84,7 +85,6 @@ async def _pages_for_host(
             child_indexes = english_indexes(child_indexes)
             if child_indexes:
                 queue[0:0] = _order_indexes(child_indexes, _host_seed(seed, host.slug))
-                continue
             known = {page.item_key for page in pages}
             pages.extend(page for page in child_pages if page.item_key not in known)
     if len(pages) > 1:
@@ -184,18 +184,23 @@ async def run_generate(
             by_host[host.slug].append((page, query))
 
     rows: list[dict[str, Any]] = []
+    used: set[str] = set()
     for host in hosts:
-        selected = by_host[host.slug][:per_host]
-        if len(selected) < per_host:
-            stats.short_hosts += 1
-        for page, query in selected:
+        chosen = 0
+        for page, query in by_host[host.slug]:
+            texts = [title_query(page), query] if "title" in slices else [query]
+            if not _claim(texts, used):
+                continue
             if "title" in slices:
                 rows.append(
-                    build_gold_row(
-                        page, query_text=title_query(page), bucket="title", hour_ts=hour_ts
-                    )
+                    build_gold_row(page, query_text=texts[0], bucket="title", hour_ts=hour_ts)
                 )
             rows.append(build_gold_row(page, query_text=query, bucket="task", hour_ts=hour_ts))
+            chosen += 1
+            if chosen == per_host:
+                break
+        if chosen < per_host:
+            stats.short_hosts += 1
     return _finish(rows, stats)
 
 
@@ -211,15 +216,28 @@ def _title_rows(
     for host, page in entries:
         by_host[host.slug].append(page)
     rows: list[dict[str, Any]] = []
+    used: set[str] = set()
     for host in hosts:
-        selected = by_host[host.slug][:per_host]
-        if len(selected) < per_host:
+        chosen = 0
+        for page in by_host[host.slug]:
+            text = title_query(page)
+            if not _claim([text], used):
+                continue
+            rows.append(build_gold_row(page, query_text=text, bucket="title", hour_ts=hour_ts))
+            chosen += 1
+            if chosen == per_host:
+                break
+        if chosen < per_host:
             stats.short_hosts += 1
-        for page in selected:
-            rows.append(
-                build_gold_row(page, query_text=title_query(page), bucket="title", hour_ts=hour_ts)
-            )
     return rows
+
+
+def _claim(texts: list[str], used: set[str]) -> bool:
+    keys = [canonicalize(text) for text in texts]
+    if len(set(keys)) != len(keys) or any(key in used for key in keys):
+        return False
+    used.update(keys)
+    return True
 
 
 def _finish(rows: list[dict[str, Any]], stats: GenStats) -> tuple[list[dict[str, Any]], GenStats]:

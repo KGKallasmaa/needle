@@ -582,7 +582,7 @@
   <div class="card" id="card-leaderboards" data-tools>
     <h2 id="sec-leaderboards">7-day leaderboards</h2>
     <div class="sub">Query-weighted 7-day means with a 95% CI;
-      <span class="hint" title="title, body, clue, and tot for Scholar; title and body for Coding; filings and filingdoc for Finance; caselaw and code for Legal">suite columns</span>
+      <span class="hint" title="title, body, clue, and tot for Scholar; title and task for Coding; filings and filingdoc for Finance; caselaw and code for Legal">suite columns</span>
       split the score.</div>
     <div class="lb-tabs" id="lb-tabs" role="tablist" aria-label="Bench leaderboards">
       <button role="tab" aria-selected="true" class="active" data-panel="card-lb-overall">Overall</button>
@@ -928,9 +928,9 @@
       <tr><td><span class="vert" data-vert="legal"></span></td><td>code</td>
         <td>eCFR sections; an LLM projects each section into a query about its regulatory substance with one verbatim quoted span, rejected if it leaks the citation; gold is the "title CFR section" citation</td></tr>
       <tr><td><span class="vert" data-vert="coding"></span></td><td>title</td>
-        <td>the product name, the section, and the page title; the section is the nearest heading or the parent path, and the page is the English one</td></tr>
+        <td>the product name, the section, and the page title. The section is the nearest heading, or the parent path when the index is a flat list. The page is the English one</td></tr>
       <tr><td><span class="vert" data-vert="coding"></span></td><td>task</td>
-        <td>an LLM query a coding agent would issue for this page, rejected if it omits the product name, copies the heading, or contains the page URL; gold is the page's host and path</td></tr>
+        <td>a 6–14 word keyword query a coding agent would issue, including the product name. Rejected when it starts with what, why, or how, copies the title, or contains the host, path, or hyphenated slug. Gold is the page's host and path</td></tr>
     </table>
   </div>
 
@@ -962,7 +962,7 @@
       <tr><td>recall@5, MRR@5</td><td><span class="vert" data-vert="legal"></span></td>
         <td>known-item: the gold opinion or CFR section identified by citation, docket (with a party-token check), CFR citation, or URL match.</td></tr>
       <tr><td>recall@5, MRR@5</td><td><span class="vert" data-vert="coding"></span></td>
-        <td>known-item: the gold documentation page identified by its host and path in a top-5 URL or snippet. A <code>.md</code> suffix, trailing slash, or query string still matches. A different path, including another version of the same page, does not.</td></tr>
+        <td>known-item: the gold documentation page identified by its host and path in a top-5 result URL or in the snippet. Scheme, a <code>.md</code> suffix, a trailing slash, and a query string still match. Path case is part of the identity. A different path, including another version or a translation, is a miss.</td></tr>
       <tr><td>latency p50 / p95</td><td>all</td>
         <td>percentiles over per-call durations of successful search API calls, pooled across queries in the window; runs published without per-call samples contribute their per-run percentiles instead. Failed calls carry no latency sample and show up in the error rate.</td></tr>
     </table>

@@ -31,6 +31,22 @@ def test_extract_page_urls():
     assert PAGE not in other_version.pages
 
 
+def test_a_url_in_the_title_is_not_a_hit():
+    keys = extract_page_keys(
+        _r("https://example.com/mirror", title=f"see https://{PAGE}", snippet="unrelated guide"),
+        snippet_chars=500,
+    )
+    assert PAGE not in keys.pages
+
+
+def test_path_case_is_part_of_the_page():
+    keys = extract_page_keys(_r("https://docs.example.com/Foo/Bar"), snippet_chars=500)
+    assert "docs.example.com/Foo/Bar" in keys.pages
+    assert PAGE not in keys.pages
+    gold = GoldCoding(text="q", item_key=PAGE, bucket="title", page_key=PAGE)
+    assert not page_match(gold, keys)
+
+
 def test_extract_page_from_snippet_only():
     keys = extract_page_keys(
         _r(

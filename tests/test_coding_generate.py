@@ -178,6 +178,64 @@ async def test_generate_follows_the_english_index_not_the_deeper_translation():
     assert {row["gold"]["path"] for row in rows} == {"/rate-limits"}
 
 
+async def test_generate_keeps_pages_listed_beside_a_nested_index():
+    root = "- [tree](https://docs.example.com/_llms/v2.txt)"
+    mixed = """
+- [Rate Limits](https://docs.example.com/rate-limits.md): plans and burst
+- [nested](https://docs.example.com/_llms/v2/features.txt)
+"""
+    nested = "- [Batch Jobs](https://docs.example.com/features/batch-jobs.md): submit many urls"
+    rows, stats = await run_generate(
+        client=FakeDocs(
+            {
+                HOST.llms_url: root,
+                "https://docs.example.com/_llms/v2.txt": mixed,
+                "https://docs.example.com/_llms/v2/features.txt": nested,
+                "https://docs.example.com/rate-limits.md": _markdown("Rate Limits"),
+                "https://docs.example.com/features/batch-jobs.md": _markdown("Batch Jobs"),
+            }
+        ),
+        llm=FakeLLM(GOOD_QUERY),
+        hour_ts=HOUR,
+        hosts=(HOST,),
+        per_host=2,
+        seed=1,
+    )
+    assert stats.candidates == 2
+    assert {row["gold"]["path"] for row in rows} == {"/rate-limits", "/features/batch-jobs"}
+
+
+async def test_generate_skips_a_repeated_query_and_fills_the_slot():
+    pages = "\n".join(
+        f"- [{name}](https://docs.example.com/{name.lower()}.md): a {name.lower()} page"
+        for name in ("Alpha", "Beta", "Gamma")
+    )
+    markdown = {
+        f"https://docs.example.com/{name.lower()}.md": _markdown(name)
+        for name in ("Alpha", "Beta", "Gamma")
+    }
+
+    class Shared:
+        async def complete(self, prompt, *, max_tokens, reasoning_effort):
+            if "Gamma" in prompt:
+                return "example finishes the distinct job in the public api", None
+            return GOOD_QUERY, None
+
+    rows, stats = await run_generate(
+        client=FakeDocs({HOST.llms_url: pages, **markdown}),
+        llm=Shared(),
+        hour_ts=HOUR,
+        hosts=(HOST,),
+        per_host=2,
+        seed=0,
+    )
+    tasks = [row for row in rows if row["query_origin"]["bucket"] == "task"]
+    assert stats.task_rows == 2
+    assert stats.short_hosts == 0
+    assert len({row["query_text"] for row in tasks}) == 2
+    assert "/gamma" in {row["gold"]["path"] for row in tasks}
+
+
 async def test_generate_title_slice_does_not_call_the_llm():
     class Boom:
         async def complete(self, prompt, *, max_tokens, reasoning_effort):

@@ -66,7 +66,7 @@ def page_key(raw: str) -> str | None:
     path = parts.path
     if path.lower().endswith(".md"):
         path = path[:-3]
-    path = path.rstrip("/").lower()
+    path = path.rstrip("/")
     if not path.startswith("/") or path == "/":
         return None
     return f"{host}{path}"

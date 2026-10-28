@@ -7,8 +7,10 @@ from needle.shared.prompts import clean_llm_line, render_prompt
 TASK_QUERY_TEMPLATE = "task_query.jinja"
 BODY_EXCERPT_CHARS = 4000
 MIN_BODY_CHARS = 180
-MIN_QUERY_WORDS = 4
+MIN_QUERY_WORDS = 6
+MAX_QUERY_WORDS = 14
 TITLE_SPAN_WORDS = 4
+QUESTION_OPENINGS = frozenset({"what", "why", "how"})
 
 WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -36,6 +38,8 @@ def title_query(page: DocPage) -> str:
 def title_span_leaks(query: str, title: str, *, span: int = TITLE_SPAN_WORDS) -> bool:
     query_words = _words(query)
     title_words = _words(title)
+    if len(title_words) == 1:
+        return title_words[0] in query_words
     if len(title_words) < 2 or len(query_words) < 2:
         return False
     n = min(span, len(title_words))
@@ -59,7 +63,10 @@ def locator_leaks(query: str, page: DocPage) -> bool:
 
 
 def task_query_ok(query: str, *, page: DocPage) -> bool:
-    if len(query.split()) < MIN_QUERY_WORDS:
+    words = query.split()
+    if not MIN_QUERY_WORDS <= len(words) <= MAX_QUERY_WORDS:
+        return False
+    if words[0].lower().strip("?.!:;,\"'") in QUESTION_OPENINGS:
         return False
     if product_missing(query, page.product):
         return False

@@ -69,3 +69,18 @@ def test_task_query_ok_requires_the_product_and_hides_the_locator():
     assert locator_leaks("example rate-limits burst windows for requests", PAGE)
     assert not task_query_ok("example rate limits for the public api", page=PAGE)
     assert not task_query_ok("example burst", page=PAGE)
+    assert not task_query_ok("example plan caps and burst", page=PAGE)
+    long = "example plan caps and burst windows for api requests across every paid tier today now"
+    assert not task_query_ok(long, page=PAGE)
+    assert not task_query_ok("how does example cap burst windows for api requests", page=PAGE)
+    crawl = DocPage(
+        product="Example",
+        title="Crawl",
+        description="Crawl a site",
+        host="docs.example.com",
+        path="/features/crawl",
+        body="Walk every linked page. " * 20,
+    )
+    assert title_span_leaks("example crawl a site and wait for pages", crawl.title)
+    assert not task_query_ok("example crawl a site and wait for pages", page=crawl)
+    assert task_query_ok("example walk every linked page and wait", page=crawl)

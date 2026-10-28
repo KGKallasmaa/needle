@@ -14,7 +14,7 @@ from needle.shared.search import (
     DEFAULT_SNIPPET_CHARS,
     SearchClient,
     SearchResult,
-    titled_snippet,
+    capped_snippet,
 )
 
 URLISH_RE = re.compile(
@@ -36,7 +36,7 @@ def extract_page_keys(result: SearchResult, *, snippet_chars: int) -> PageKeys:
     direct = page_key(result.url or "")
     if direct:
         keys.pages.add(direct)
-    text = titled_snippet(result, snippet_chars)
+    text = capped_snippet(result, snippet_chars)
     for match in URLISH_RE.finditer(text):
         key = page_key(match.group(0))
         if key:
