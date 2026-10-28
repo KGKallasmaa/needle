@@ -210,14 +210,14 @@ def publish(
         if row["ts"] < week_start:
             row.pop("lat_ms", None)
     write_jsonl(history, str(data / "history.jsonl"))
-    overlap = _merged_rows(data / "overlap.jsonl", overlap, ts, republish)
-    uniqueness = _merged_rows(data / "uniqueness.jsonl", uniqueness, ts, republish)
-    write_jsonl(overlap, str(data / "overlap.jsonl"))
-    write_jsonl(uniqueness, str(data / "uniqueness.jsonl"))
+    overlap_all = _merged_rows(data / "overlap.jsonl", overlap, ts, republish)
+    uniqueness_all = _merged_rows(data / "uniqueness.jsonl", uniqueness, ts, republish)
+    write_jsonl(overlap_all, str(data / "overlap.jsonl"))
+    write_jsonl(uniqueness_all, str(data / "uniqueness.jsonl"))
     write_json(
         {
-            "all": independence_totals(overlap, uniqueness),
-            "week": independence_totals(overlap, uniqueness, since=week_start),
+            "all": independence_totals(overlap_all, uniqueness_all),
+            "week": independence_totals(overlap_all, uniqueness_all, since=week_start),
         },
         str(data / "independence.json"),
         indent=None,

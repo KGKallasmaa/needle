@@ -1130,7 +1130,7 @@ function engineCell(engine, cls = "") {
   return td;
 }
 let history = [];
-const independence = { all: { overlap: [], uniqueness: [] }, week: { overlap: [], uniqueness: [] } };
+let independence = null;
 let ciData = null;
 
 const fmt3 = (v) => v == null ? "–" : v.toFixed(3);
@@ -1781,7 +1781,7 @@ function renderStandings(rows) {
         const price = PRICES.get(x.e) ?? null;
         const lat = latency.get(x.e);
         const u = unique.get(x.e);
-        const uniqueShare = u?.relDen ? u.relUnique / u.relDen : null;
+        const uniqueShare = u?.total ? u.relUnique / u.total : null;
         return {
           engine: x.e, name: displayName(x.e), home: x.e === HOME_ENGINE,
           overall: x.overall, ci: c ? [c.lo, c.hi] : null,
@@ -2453,24 +2453,10 @@ function renderOverlap(rows, uniqAgg) {
   shareHolder.replaceChildren();
   graphHolder.replaceChildren();
   const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-  const pairs = new Map();
-  const seen = new Set();
-  for (const r of rows) {
-    seen.add(r.a);
-    seen.add(r.b);
-    const key = pairKey(r.a, r.b);
-    let agg = pairs.get(key);
-    if (!agg) pairs.set(key, agg = { low2: 0, lowUrls: 0, nLow: 0, shared: 0, union: 0 });
-    if (r.num_suspect != null) {
-      agg.low2 += r.num_suspect;
-      agg.lowUrls += r.low_shared_urls || 0;
-      agg.nLow += r.num_queries;
-    }
-    if (r.union_urls != null) {
-      agg.shared += r.shared_urls;
-      agg.union += r.union_urls;
-    }
-  }
+  const pairs = new Map(rows.map((r) => [pairKey(r.a, r.b), {
+    low2: r.num_suspect, lowUrls: r.low_shared_urls, nLow: r.num_queries, shared: r.shared_urls, union: r.union_urls,
+  }]));
+  const seen = new Set(rows.flatMap((r) => [r.a, r.b]));
   const engines = ENGINES.filter((e) => seen.has(e));
   const rank = new Map(engines.map((e, i) => [e, i]));
   const famRank = (e) => rank.get(ENGINE_FAMILY.get(e) ?? e) ?? rank.get(e);
@@ -2629,18 +2615,7 @@ function renderSharingGraph(holder, engines, pairs, uniqAgg) {
 }
 
 function uniquenessAgg(rows) {
-  const agg = new Map();
-  for (const r of rows) {
-    const e = agg.get(r.engine) || { unique: 0, total: 0, relUnique: 0, relDen: 0 };
-    e.unique += r.unique_urls;
-    e.total += r.total_urls;
-    if (r.unique_relevant_urls != null) {
-      e.relUnique += r.unique_relevant_urls;
-      e.relDen += r.total_urls;
-    }
-    agg.set(r.engine, e);
-  }
-  return agg;
+  return new Map(rows.map((r) => [r.engine, { unique: r.unique_urls, total: r.total_urls, relUnique: r.unique_relevant_urls }]));
 }
 
 function renderIndependence(range) {
@@ -2654,19 +2629,19 @@ function renderIndependence(range) {
 function renderUniqueness(agg) {
   const holder = document.getElementById("uniqueness-table");
   holder.replaceChildren();
-  const engines = ENGINES.filter((e) => agg.get(e)?.relDen);
+  const engines = ENGINES.filter((e) => agg.get(e)?.total);
   if (!engines.length) {
     holder.appendChild(el("div", { class: "empty" }, "No uniqueness data yet."));
     return;
   }
-  engines.sort((a, b) => agg.get(b).relUnique / agg.get(b).relDen - agg.get(a).relUnique / agg.get(a).relDen);
+  engines.sort((a, b) => agg.get(b).relUnique / agg.get(b).total - agg.get(a).relUnique / agg.get(a).total);
   const table = el("table");
   const head = el("tr");
   for (const h of ["engine", "", "unique", "URLs"]) head.appendChild(el("th", {}, h));
   table.appendChild(head);
   for (const e of engines) {
     const unique = agg.get(e).relUnique;
-    const total = agg.get(e).relDen;
+    const total = agg.get(e).total;
     const pct = unique / total;
     const tr = el("tr");
     markHome(tr, e);
@@ -3369,10 +3344,11 @@ async function main() {
   drawTrends(history);
   renderLatencySummary(history);
   renderAll();
-  for (const [range, totals] of Object.entries(independence)) {
-    totals.uniqueness = (indep[range]?.uniqueness || []).filter((r) => !HIDDEN_ENGINES.has(r.engine));
-    totals.overlap = (indep[range]?.overlap || []).filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b));
-  }
+  const visible = ({ overlap = [], uniqueness = [] } = {}) => ({
+    overlap: overlap.filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b)),
+    uniqueness: uniqueness.filter((r) => !HIDDEN_ENGINES.has(r.engine)),
+  });
+  independence = { all: visible(indep.all), week: visible(indep.week) };
   renderIndependence("all runs");
   document.getElementById("independence-range").addEventListener("click", (ev) => {
     const btn = ev.target.closest("button");

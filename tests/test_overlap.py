@@ -270,8 +270,7 @@ def test_overlap_and_uniqueness_exclude_ultimate():
 
 def test_independence_totals_sum_pairs_and_engines():
     def pair(ts, a, b, **kw):
-        row = {"ts": ts, "a": a, "b": b, "num_queries": 10}
-        return row | kw
+        return {"ts": ts, "a": a, "b": b, "num_queries": 10, **kw}
 
     overlap = [
         pair("2026-08-01T00:00Z", "e1", "e2", num_suspect=2, low_shared_urls=3),
