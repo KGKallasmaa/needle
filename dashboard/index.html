@@ -1000,7 +1000,7 @@
         <td>the exact queries each run issued, including gold answers (fresh.jsonl, gold.jsonl, scholar.jsonl, legal.jsonl)</td>
         <td>same run folder</td></tr>
       <tr><td>dashboard aggregates</td>
-        <td>history.jsonl, overlap.jsonl, uniqueness.jsonl, runs.json, ci_scores.jsonl, ci.json</td>
+        <td>history.jsonl, overlap.jsonl, uniqueness.jsonl, independence.json, runs.json, ci_scores.jsonl, ci.json</td>
         <td>data/ on this site (gh-pages)</td></tr>
       <tr><td>prompts &amp; scoring code</td>
         <td>judge prompt (shared/prompts/judgement.jinja), metric implementations, engine clients</td>
@@ -1130,8 +1130,7 @@ function engineCell(engine, cls = "") {
   return td;
 }
 let history = [];
-let uniqueness = [];
-let overlap = [];
+const independence = { all: { overlap: [], uniqueness: [] }, week: { overlap: [], uniqueness: [] } };
 let ciData = null;
 
 const fmt3 = (v) => v == null ? "–" : v.toFixed(3);
@@ -1770,7 +1769,7 @@ function renderStandings(rows) {
   ];
   card._summaryData = () => {
     const latency = new Map(latencyStats(rows).map((s) => [s.e, s]));
-    const unique = uniquenessAgg(inRange(uniqueness, WEEK_MS));
+    const unique = uniquenessAgg(independence.week.uniqueness);
     const runTimes = STANDINGS_BENCHES.map(([b]) => [...new Set(ciWindowed(rows, b).map((r) => r.ts))].sort());
     const allTimes = runTimes.flat().sort();
     return {
@@ -2632,7 +2631,6 @@ function renderSharingGraph(holder, engines, pairs, uniqAgg) {
 function uniquenessAgg(rows) {
   const agg = new Map();
   for (const r of rows) {
-    if (Date.parse(r.ts) < TREND_START) continue;
     const e = agg.get(r.engine) || { unique: 0, total: 0, relUnique: 0, relDen: 0 };
     e.unique += r.unique_urls;
     e.total += r.total_urls;
@@ -2646,11 +2644,10 @@ function uniquenessAgg(rows) {
 }
 
 function renderIndependence(range) {
-  const weekOnly = range === "last 7 days";
-  const pick = (rows) => (weekOnly ? inRange(rows, WEEK_MS) : rows);
+  const totals = independence[range === "last 7 days" ? "week" : "all"];
   for (const span of document.querySelectorAll(".ind-range")) span.textContent = range;
-  const uniqAgg = uniquenessAgg(pick(uniqueness));
-  renderOverlap(pick(overlap), uniqAgg);
+  const uniqAgg = uniquenessAgg(totals.uniqueness);
+  renderOverlap(totals.overlap, uniqAgg);
   renderUniqueness(uniqAgg);
 }
 
@@ -3351,10 +3348,9 @@ async function main() {
       .then((r) => (r.ok ? r.text() : ""))
       .catch(() => "")
       .then((text) => text.split("\n").filter(Boolean).map((l) => JSON.parse(l)));
-  const [histRows, overlapRows, uniquenessRows, families, ci] = await Promise.all([
+  const [histRows, indep, families, ci] = await Promise.all([
     fetchRows("data/history.jsonl"),
-    fetchRows("data/overlap.jsonl"),
-    fetchRows("data/uniqueness.jsonl"),
+    fetchJson("data/independence.json").catch(() => ({})),
     fetchJson("data/families.json").catch(() => ({})),
     fetchJson("data/ci.json").catch(() => null),
   ]);
@@ -3373,8 +3369,10 @@ async function main() {
   drawTrends(history);
   renderLatencySummary(history);
   renderAll();
-  uniqueness = uniquenessRows.filter((r) => !HIDDEN_ENGINES.has(r.engine));
-  overlap = overlapRows.filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b));
+  for (const [range, totals] of Object.entries(independence)) {
+    totals.uniqueness = (indep[range]?.uniqueness || []).filter((r) => !HIDDEN_ENGINES.has(r.engine));
+    totals.overlap = (indep[range]?.overlap || []).filter((r) => !HIDDEN_ENGINES.has(r.a) && !HIDDEN_ENGINES.has(r.b));
+  }
   renderIndependence("all runs");
   document.getElementById("independence-range").addEventListener("click", (ev) => {
     const btn = ev.target.closest("button");

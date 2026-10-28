@@ -1,4 +1,4 @@
-from needle.shared.overlap import overlap_rows, uniqueness_rows
+from needle.shared.overlap import independence_totals, overlap_rows, uniqueness_rows
 
 
 def _report(per_query_by_engine):
@@ -266,3 +266,45 @@ def test_overlap_and_uniqueness_exclude_ultimate():
     urows = uniqueness_rows(report, ts="t")
     assert {r["engine"] for r in urows} == {"e1", "e2"}
     assert all(r["unique_urls"] == 1 for r in urows)
+
+
+def test_independence_totals_sum_pairs_and_engines():
+    def pair(ts, a, b, **kw):
+        row = {"ts": ts, "a": a, "b": b, "num_queries": 10}
+        return row | kw
+
+    overlap = [
+        pair("2026-08-01T00:00Z", "e1", "e2", num_suspect=2, low_shared_urls=3),
+        pair(
+            "2026-08-02T00:00Z",
+            "e2",
+            "e1",
+            num_suspect=1,
+            low_shared_urls=1,
+            shared_urls=4,
+            union_urls=20,
+        ),
+        pair("2026-08-03T00:00Z", "e1", "e2"),
+    ]
+    uniqueness = [
+        {"ts": ts, "engine": "e1", "unique_urls": 1, "total_urls": 5, "unique_relevant_urls": 1}
+        for ts in ("2026-07-31T00:00Z", "2026-08-01T00:00Z", "2026-08-02T00:00Z")
+    ]
+    totals = independence_totals(overlap, uniqueness)
+    assert totals["overlap"] == [
+        {
+            "a": "e1",
+            "b": "e2",
+            "num_suspect": 3,
+            "low_shared_urls": 4,
+            "num_queries": 20,
+            "shared_urls": 4,
+            "union_urls": 20,
+        }
+    ]
+    assert totals["uniqueness"] == [
+        {"engine": "e1", "unique_urls": 2, "total_urls": 10, "unique_relevant_urls": 2}
+    ]
+    week = independence_totals(overlap, uniqueness, since="2026-08-02T00:00Z")
+    assert week["overlap"][0]["num_queries"] == 10
+    assert week["uniqueness"][0]["total_urls"] == 5

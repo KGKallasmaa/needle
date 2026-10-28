@@ -98,6 +98,46 @@ def test_publish_writes_ci_files(tmp_path):
     assert runs[0]["artifacts"] == ["ndcg.json"]
 
 
+def test_publish_trims_old_latency_and_writes_independence(tmp_path):
+    report = {
+        "num_queries": 1,
+        "engines": {
+            name: {
+                "mean_ndcg": 0.5,
+                "num_scored": 1,
+                "search_errors": 0,
+                "judge_errors": 0,
+                "latency": {"p50_ms": 100, "p95_ms": 200, "samples_ms": [100]},
+                "per_query": [
+                    {
+                        "query": "q",
+                        "score": 1.0,
+                        "search_error": None,
+                        "results": [{"url": "https://a.com"}],
+                    }
+                ],
+            }
+            for name in ("e1", "e2")
+        },
+    }
+    ndcg = tmp_path / "ndcg.json"
+    ndcg.write_text(json.dumps(report), encoding="utf-8")
+    site = tmp_path / "site"
+    for ts in ("2026-08-01T00:00Z", "2026-08-08T00:00Z", "2026-08-09T00:00Z"):
+        publish_bench.publish(
+            site=str(site), runs_out=str(tmp_path / "runs"), ndcg=str(ndcg), ts=ts
+        )
+    data = site / "data"
+    history = [json.loads(line) for line in (data / "history.jsonl").read_text().splitlines()]
+    assert [("lat_ms" in r) for r in history] == [False, False, True, True, True, True]
+    assert all(r["p50_ms"] == 100 for r in history)
+    independence = json.loads((data / "independence.json").read_text(encoding="utf-8"))
+    assert independence["all"]["overlap"][0]["union_urls"] == 3
+    assert independence["week"]["overlap"][0]["union_urls"] == 2
+    assert {r["engine"] for r in independence["week"]["uniqueness"]} == {"e1", "e2"}
+    assert len((data / "overlap.jsonl").read_text().splitlines()) == 3
+
+
 def test_publish_auto_ts_skips_taken_minute(tmp_path, monkeypatch, capsys):
     site = tmp_path / "site"
     (site / "data").mkdir(parents=True)
