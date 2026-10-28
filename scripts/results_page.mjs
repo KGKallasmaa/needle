@@ -25,7 +25,8 @@ const ALT_MAX = 125;
 const HISTORY_DATA = [["csv", "CSV"], ["json", "JSON"], ["md", "Markdown"]];
 const HISTORY_CHART = [["webp", "WebP"], ["png", "PNG"]];
 const PROSE_NAMES = new Map([
-  ["exa", "Exa"], ["exa-instant", "Exa Instant"], ["brave", "Brave"],
+  ["exa", "Exa"], ["exa-instant", "Exa Instant"],
+  ["exa-lite", "Exa Lite"], ["brave", "Brave"],
   ["brave-llmcontext", "Brave LLM Context"], ["parallel", "Parallel"],
   ["parallel-turbo", "Parallel Turbo"], ["perplexity", "Perplexity"],
   ["perplexity-fast", "Perplexity Fast"], ["tavily", "Tavily"], ["linkup", "Linkup"],
