@@ -4,6 +4,7 @@ import pytest
 
 from needle.shared.rankeval import EvalQuery, run_ndcg
 from needle.shared.search import SearchResult
+from needle.shared.search import base as search_base
 
 TODAY = "2026-07-01"
 PROFILE_YAML = (
@@ -93,16 +94,17 @@ async def test_run_ndcg_excludes_search_errors_from_mean():
     assert errored["search_error"]["error_type"] == "http_error"
 
 
-async def test_run_ndcg_search_error_scores_zero_when_pool_exists():
+async def test_run_ndcg_search_error_excluded_when_pool_exists():
     err = {"error_type": "http_error", "error_message": "503"}
     good = FakeEngine([SearchResult(url="https://g1", title="GOODDOC one")])
     broken = FakeEngine([], error=err)
     report = await run_ndcg([q("q1")], {"good": good, "broken": broken}, FakeJudge())
     b = report["engines"]["broken"]
     assert b["search_errors"] == 1
-    assert b["num_scored"] == 1
+    assert b["num_scored"] == 0
     assert b["mean_ndcg"] == 0.0
-    assert b["per_query"][0]["ndcg"] == 0.0
+    assert b["per_query"][0]["ndcg"] is None
+    assert b["per_query"][0]["score"] is None
     assert report["engines"]["good"]["mean_ndcg"] == pytest.approx(1.0)
 
 
@@ -348,3 +350,25 @@ async def test_run_ndcg_judges_without_profile_when_classification_fails():
     assert pq["query_profile"] is None
     assert pq["ratings"] == [4]
     assert pq["judge_errors"] == 0
+
+
+async def test_run_ndcg_reports_when_each_engine_was_queried(monkeypatch):
+    stamps = iter(["2026-07-01T00:00:01.000Z", "2026-07-01T00:00:02.000Z"])
+    monkeypatch.setattr("needle.shared.search.base.utc_stamp", lambda: next(stamps), raising=True)
+
+    class StampedEngine(FakeEngine):
+        async def search(self, query, *, num_results=10):
+            search_base.note_request_time()
+            return await super().search(query, num_results=num_results)
+
+    doc = [SearchResult(url="https://a", title="GOODDOC", snippet="GOODDOC")]
+    report = await run_ndcg(
+        [q("one")],
+        {"e1": StampedEngine(doc), "e2": StampedEngine(doc)},
+        FakeJudge(),
+        num_results=1,
+        k=1,
+    )
+    assert report["engines"]["e1"]["per_query"][0]["queried_at"] == "2026-07-01T00:00:01.000Z"
+    assert report["engines"]["e2"]["per_query"][0]["queried_at"] == "2026-07-01T00:00:02.000Z"
+    assert report["engines"]["ultimate"]["per_query"][0]["queried_at"] is None

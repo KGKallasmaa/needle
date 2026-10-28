@@ -17,7 +17,13 @@ from needle.shared.metrics import (
     normalize_url,
 )
 from needle.shared.recall import ULTIMATE
-from needle.shared.search import SearchClient, SearchResult, latency_stats, search_all
+from needle.shared.search import (
+    SearchClient,
+    SearchResult,
+    SearchRun,
+    latency_stats,
+    search_all,
+)
 
 
 @dataclass(frozen=True)
@@ -28,7 +34,7 @@ class EvalQuery:
 
 @dataclass(frozen=True)
 class QueryRun:
-    searches: list[Any]
+    searches: list[SearchRun]
     judgements: list[list[Judgement | None]]
     n_judged: int
     profile: dict[str, Any] | None
@@ -43,10 +49,12 @@ def _score_query(
     k: int,
     profile: dict[str, Any] | None,
     idcg: float | None = None,
+    queried_at: str | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
         "query": query.text,
         "query_profile": profile,
+        "queried_at": queried_at,
         "ndcg": None,
         "dcg": None,
         "ratings": [],
@@ -57,9 +65,6 @@ def _score_query(
         "search_error": search_error,
     }
     if search_error is not None:
-        if idcg:
-            out["dcg"] = 0.0
-            out["ndcg"] = 0.0
         return out
     results = results or []
     out["n_results"] = len(results)
@@ -92,11 +97,12 @@ def _score_query(
 
 
 def _ultimate_query(query: EvalQuery, run: QueryRun, *, num_results: int, k: int) -> dict[str, Any]:
-    if all(err is not None for _, err in run.searches):
+    if all(s.error is not None for s in run.searches):
         error = {"error_type": "all_engines_failed", "error_message": "every engine errored"}
         return _score_query(query, None, error, [], k=k, profile=run.profile)
     best: dict[str, tuple[SearchResult, Judgement | None]] = {}
-    for (results, err), judgements in zip(run.searches, run.judgements, strict=True):
+    for search, judgements in zip(run.searches, run.judgements, strict=True):
+        results, err = search.results, search.error
         if err is not None:
             continue
         for r, j in zip(results or [], judgements, strict=True):
@@ -176,14 +182,14 @@ async def run_ndcg(
         return profile
 
     async def judge_query(
-        query: EvalQuery, searches: list[Any], profile: QueryProfile | None
+        query: EvalQuery, searches: list[SearchRun], profile: QueryProfile | None
     ) -> QueryRun:
         keyed: list[list[tuple]] = []
         unique: dict[tuple, SearchResult] = {}
-        for results, err in searches:
+        for search in searches:
             keys = []
-            if err is None:
-                for r in results or []:
+            if search.error is None:
+                for r in search.results or []:
                     key = (normalize_url(r.url), r.title, r.snippet, r.published_date)
                     keys.append(key)
                     unique.setdefault(key, r)
@@ -229,10 +235,17 @@ async def run_ndcg(
     for ni, name in enumerate(names):
         per_query = []
         for query, run, idcg in zip(queries, query_outs, idcgs, strict=True):
-            results, err = run.searches[ni]
+            search = run.searches[ni]
             per_query.append(
                 _score_query(
-                    query, results, err, run.judgements[ni], k=k, profile=run.profile, idcg=idcg
+                    query,
+                    search.results,
+                    search.error,
+                    run.judgements[ni],
+                    k=k,
+                    profile=run.profile,
+                    idcg=idcg,
+                    queried_at=search.queried_at,
                 )
             )
         engines_out[name] = _summarize(per_query, latencies_ms=engines[name].latencies_ms)

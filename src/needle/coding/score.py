@@ -4,6 +4,7 @@ from typing import Any
 
 from needle.coding.sources import page_key
 from needle.shared.recall import (
+    answered,
     build_match_rows,
     first_rank,
     group_recall,
@@ -58,11 +59,12 @@ def page_match(gold: GoldCoding, found: PageKeys) -> bool:
 
 
 def _summary(per_query: list[dict], latency: dict | None) -> dict[str, Any]:
+    scored = answered(per_query)
     return {
-        **recall_summary(per_query, latency),
-        "by_bucket": group_recall(per_query, lambda pq: pq["bucket"]),
+        **recall_summary(per_query, latency, scored),
+        "by_bucket": group_recall(scored, lambda pq: pq["bucket"]),
         "by_product": group_recall(
-            [pq for pq in per_query if pq.get("product")], lambda pq: pq["product"]
+            [pq for pq in scored if pq.get("product")], lambda pq: pq["product"]
         ),
     }
 

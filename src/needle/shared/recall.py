@@ -13,6 +13,10 @@ from needle.shared.search.base import (
 ULTIMATE = "ultimate"
 
 
+def answered(per_query: list[dict]) -> list[dict]:
+    return [pq for pq in per_query if pq["search_error"] is None]
+
+
 def first_rank(flags: Sequence[object]) -> int | None:
     return next((rank for rank, flag in enumerate(flags, start=1) if flag), None)
 
@@ -58,7 +62,7 @@ def ultimate_per_query(query_outs: list[list[dict]], *, cap: int) -> list[dict]:
 def recall_summary(
     per_query: list[dict], latency: dict | None, scored: list[dict] | None = None
 ) -> dict[str, Any]:
-    scored = per_query if scored is None else scored
+    scored = answered(per_query if scored is None else scored)
     for pq in per_query:
         pq["score"] = None
     for pq in scored:
@@ -133,10 +137,13 @@ async def run_known_item_eval(
     )
     query_outs = await asyncio.gather(
         *[
-            asyncio.gather(*[eval_engine(query, r, e) for r, e in searches])
+            asyncio.gather(*[eval_engine(query, s.results, s.error) for s in searches])
             for query, searches in zip(queries, searches_by_query, strict=True)
         ]
     )
+    for entries, searches in zip(query_outs, searches_by_query, strict=True):
+        for out, search in zip(entries, searches, strict=True):
+            out["queried_at"] = search.queried_at
 
     engines_out: dict[str, dict[str, Any]] = {}
     for idx, name in enumerate(engine_names):
@@ -145,6 +152,8 @@ async def run_known_item_eval(
     if engine_names:
         engines_out[ULTIMATE] = summary(ultimate_fn(query_outs, cap=num_results), None)
         engines_out[ULTIMATE]["mrr_at_k"] = None
+        for pq in engines_out[ULTIMATE]["per_query"]:
+            pq["queried_at"] = None
 
     classify_misses(query_outs, engine_names, engines_out)
 
